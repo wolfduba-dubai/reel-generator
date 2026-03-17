@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-152245 latest -->
+<!-- v20260317-153519 audio-fade-fix -->
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
@@ -670,14 +670,24 @@ async function generate(){
             buffers.push(silence);
           }
         }
-        // Calculate total samples
+        // Stitch buffers with fade in/out on each chunk to prevent clicks/buzzing
+        var fadeLen=Math.floor(actx.sampleRate*0.008); // 8ms fade
         var totalSamples=buffers.reduce(function(a,b){return a+b.length;},0);
         var combined=actx.createBuffer(1,totalSamples,actx.sampleRate);
         var channel=combined.getChannelData(0);
         var offset=0;
         buffers.forEach(function(b){
-          channel.set(b.getChannelData(0),offset);
-          offset+=b.length;
+          var src=b.getChannelData(0);
+          var len=src.length;
+          for(var si=0;si<len;si++){
+            var s=src[si];
+            // Fade in at start of chunk
+            if(si<fadeLen) s*=(si/fadeLen);
+            // Fade out at end of chunk
+            if(si>len-fadeLen) s*=((len-si)/fadeLen);
+            channel[offset+si]=s;
+          }
+          offset+=len;
         });
         // Convert to wav blob
         var wavBlob=audioBufferToWav(combined);
@@ -1306,9 +1316,9 @@ function exportReel(){
     var fmtEl=document.getElementById('exportFmt');
     if(fmtEl){fmtEl.textContent=isMp4?'✓ MP4 — ready for Instagram':'⚠ WebM format — convert below';
     fmtEl.style.color=isMp4?'#00d4aa':'#ffb800';}
-    // Show convert button only if WebM
+    // Always show convert button — user can always get MP4
     var cw=document.getElementById('convertWrap');
-    if(cw) cw.style.display=isMp4?'none':'block';
+    if(cw) cw.style.display='block';
     document.getElementById('exportBtn').disabled=false;
     if(recAudio) recAudio.pause();
     if(raf){cancelAnimationFrame(raf);raf=null;}
