@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-150937 keep-symbols-in-chunks -->
+<!-- v20260317-152245 latest -->
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -282,13 +283,21 @@ select option{background:#0e0e1c}
           <div class="info-box"><div class="ib-lbl">B-roll clips</div><div class="ib-val ok" id="infoB">Loading...</div></div>
         </div>
         <div class="act-row">
-          <button class="abtn abtn-p" id="exportBtn" onclick="exportReel()">⬇ Export Reel</button>
+          <button class="abtn abtn-p" id="exportBtn" onclick="exportReel()">⬇ Export WebM</button>
+          <button class="abtn abtn-p" id="exportMp4Btn" onclick="exportMp4()" style="display:none">⬇ Export MP4</button>
           <button class="abtn abtn-s" onclick="doCopy(igCaption,'📋 Caption')">📋 Caption</button>
         </div>
         <div class="sbar" id="expSt"></div>
+        <div id="exportFmt" style="font-size:11px;margin-top:4px"></div>
         <div id="dlwrap" style="display:none;margin-top:6px">
-          <a id="dlLink" download="reel.webm" style="font-size:13px;color:#7c6dff;font-weight:700">⬇ Download Reel</a>
-          <div class="note" style="margin-top:4px">WebM · Convert free at cloudconvert.com if needed</div>
+          <a id="dlLink" download="reel.mp4" style="font-size:14px;color:#7c6dff;font-weight:800">⬇ Download Reel</a>
+          <div class="note" style="margin-top:4px">If WebM: click Convert below</div>
+        </div>
+        <div id="convertWrap" style="display:none;margin-top:8px">
+          <button onclick="convertToMp4()" id="convertBtn" style="width:100%;padding:10px;border-radius:10px;border:none;cursor:pointer;font-family:Arial,sans-serif;font-size:13px;font-weight:700;background:linear-gradient(135deg,#ff4d6d,#ff8c00);color:#fff">
+            🔄 Convert to MP4 for Instagram
+          </button>
+          <div class="sbar" id="convertSt"></div>
         </div>
         <div class="tip-box" style="margin-top:8px">
           <strong>After export:</strong> Instagram → add trending audio → post 🚀<br>
@@ -1270,15 +1279,36 @@ function exportReel(){
   }
 
   var combined=new MediaStream(tracks),recChunks=[];
-  var mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
+  // Try MP4 first (works on Chrome Windows), fall back to WebM
+  var mime='video/webm';
+  var isMp4=false;
+  if(MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')){
+    mime='video/mp4;codecs=avc1';isMp4=true;
+  } else if(MediaRecorder.isTypeSupported('video/mp4')){
+    mime='video/mp4';isMp4=true;
+  } else if(MediaRecorder.isTypeSupported('video/webm;codecs=vp9')){
+    mime='video/webm;codecs=vp9';
+  }
+  log('gdbg','→ Recording format: '+mime);
   var mr=new MediaRecorder(combined,{mimeType:mime});
   mr.ondataavailable=function(e){if(e.data&&e.data.size>0)recChunks.push(e.data);};
   mr.onstop=function(){
-    var blob=new Blob(recChunks,{type:'video/webm'});
-    document.getElementById('dlLink').href=URL.createObjectURL(blob);
-    document.getElementById('dlLink').download='reel-'+Date.now()+'.webm';
+    var ext=isMp4?'mp4':'webm';
+    var type=isMp4?'video/mp4':'video/webm';
+    var blob=new Blob(recChunks,{type:type});
+    var url=URL.createObjectURL(blob);
+    document.getElementById('dlLink').href=url;
+    document.getElementById('dlLink').download='reel-'+Date.now()+'.'+ext;
     document.getElementById('dlwrap').style.display='block';
-    setSt('Reel ready! Download below 🔥',false,'expSt');
+    var msg=isMp4?'✓ MP4 ready! Download and post 🔥':'WebM recorded — click Convert to MP4 below';
+    setSt(msg,false,'expSt');
+    // Show format badge
+    var fmtEl=document.getElementById('exportFmt');
+    if(fmtEl){fmtEl.textContent=isMp4?'✓ MP4 — ready for Instagram':'⚠ WebM format — convert below';
+    fmtEl.style.color=isMp4?'#00d4aa':'#ffb800';}
+    // Show convert button only if WebM
+    var cw=document.getElementById('convertWrap');
+    if(cw) cw.style.display=isMp4?'none':'block';
     document.getElementById('exportBtn').disabled=false;
     if(recAudio) recAudio.pause();
     if(raf){cancelAnimationFrame(raf);raf=null;}
@@ -1310,6 +1340,41 @@ function copyYtTags(){
     var b=document.getElementById('cpTagsBtn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy tags';},2000);
   });
 }
+// Convert WebM to MP4 using ffmpeg.wasm
+var webmBlob=null;
+async function convertToMp4(){
+  var btn=document.getElementById('convertBtn');
+  btn.disabled=true;
+  setSt('Loading converter...',true,'convertSt');
+  try{
+    var {createFFmpeg,fetchFile}=FFmpeg;
+    var ff=createFFmpeg({log:false});
+    await ff.load();
+    setSt('Converting to MP4...',true,'convertSt');
+    // Get current WebM blob from download link
+    var dlUrl=document.getElementById('dlLink').href;
+    var resp=await fetch(dlUrl);
+    var webmData=await resp.arrayBuffer();
+    ff.FS('writeFile','input.webm',new Uint8Array(webmData));
+    await ff.run('-i','input.webm','-c:v','libx264','-preset','fast','-crf','23','-c:a','aac','-movflags','+faststart','output.mp4');
+    var mp4Data=ff.FS('readFile','output.mp4');
+    var mp4Blob=new Blob([mp4Data.buffer],{type:'video/mp4'});
+    var mp4Url=URL.createObjectURL(mp4Blob);
+    // Update download link to MP4
+    var dl=document.getElementById('dlLink');
+    dl.href=mp4Url;
+    dl.download='reel-'+Date.now()+'.mp4';
+    dl.textContent='⬇ Download MP4';
+    setSt('✓ MP4 ready! Download above 🔥',false,'convertSt');
+    var fmtEl=document.getElementById('exportFmt');
+    if(fmtEl){fmtEl.textContent='✓ MP4 — ready for Instagram';fmtEl.style.color='#00d4aa';}
+    btn.style.display='none';
+  }catch(e){
+    setSt('Convert failed: '+e.message,false,'convertSt');
+    btn.disabled=false;
+  }
+}
+
 function doCopy(txt,label){
   if(!txt){alert('Generate a reel first.');return;}
   navigator.clipboard.writeText(txt).then(function(){
