@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-165013 restore-perfect-audio -->
+<!-- v20260317-165357 audio-fix-sync-fix -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -615,26 +615,16 @@ async function generate(){
                 var totalDurMs=tmp.duration*1000;
                 log('gdbg','→ Audio duration: '+tmp.duration.toFixed(2)+'s');
                 if(totalDurMs>500){
-                  // Distribute captions by character count — more chars = more time
-                  var totalChars=cleanChunks.reduce(function(a,c){return a+c.length;},0);
-                  var msPerChar=totalDurMs/totalChars;
+                  // Split audio duration evenly across chunks
+                  // Even split is more reliable than character count for Fish Audio
+                  var perChunk=totalDurMs/chunks.length;
                   var t=0;
-                  chunks.forEach(function(c,i){
-                    var chars=Math.max(4,cleanChunks[i]?cleanChunks[i].length:4);
-                    var ct=Math.round(msPerChar*chars);
-                    ct=Math.max(700,Math.min(3000,ct));
-                    c.start=t;
-                    c.end=t+ct-30;
-                    t+=ct;
-                  });
-                  // Normalize to exact audio duration
-                  var lastEnd=chunks[chunks.length-1].end;
-                  var scale=totalDurMs/lastEnd;
                   chunks.forEach(function(c){
-                    c.start=Math.round(c.start*scale);
-                    c.end=Math.round(c.end*scale);
+                    c.start=Math.round(t);
+                    c.end=Math.round(t+perChunk-50);
+                    t+=perChunk;
                   });
-                  log('gdbg','→ Captions synced to '+tmp.duration.toFixed(1)+'s');
+                  log('gdbg','→ Captions: '+chunks.length+' chunks x '+(perChunk/1000).toFixed(2)+'s = '+tmp.duration.toFixed(1)+'s total');
                 }
                 resolve();
               });
@@ -1219,7 +1209,7 @@ function restartReel(){
 }
 
 // ── EXPORT ────────────────────────────────────────────────────────────────────
-function exportReel(){
+async function exportReel(){
   if(playing){playing=false;cancelAnimationFrame(raf);}
   if(previewAudio){previewAudio.pause();previewAudio=null;}
   chunkVideos.forEach(function(v){if(v){v.currentTime=0;v.pause();}});
@@ -1235,14 +1225,30 @@ function exportReel(){
   var tracks=Array.from(stream.getVideoTracks());
   var recAudio=null;
   if(audioUrl){
-    recAudio=new Audio(audioUrl);recAudio.play();
+    recAudio=new Audio(audioUrl);
+    recAudio.volume=1.0;
+    // Must play AFTER adding to stream to avoid Chrome timing bug
     try{
-      var actx=new AudioContext();
+      var actx=new (window.AudioContext||window.webkitAudioContext)();
+      // Resume context if suspended (Chrome autoplay policy)
+      if(actx.state==='suspended') await actx.resume();
       var asrc=actx.createMediaElementSource(recAudio);
       var dest=actx.createMediaStreamDestination();
-      asrc.connect(dest);asrc.connect(actx.destination);
-      dest.stream.getAudioTracks().forEach(function(t){tracks.push(t);});
-    }catch(e){log('gdbg','→ Audio context error: '+e.message);}
+      asrc.connect(dest);
+      asrc.connect(actx.destination);
+      dest.stream.getAudioTracks().forEach(function(t){
+        tracks.push(t);
+        log('gdbg','→ Audio track added: '+t.label);
+      });
+      log('gdbg','→ AudioContext state: '+actx.state);
+    }catch(e){
+      log('gdbg','→ AudioContext error: '+e.message);
+    }
+    recAudio.play().then(function(){
+      log('gdbg','→ Audio playing OK');
+    }).catch(function(e){
+      log('gdbg','→ Audio play error: '+e.message);
+    });
   }
 
   var combined=new MediaStream(tracks),recChunks=[];
