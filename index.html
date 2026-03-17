@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-145615 caption-closer-numbers -->
+<!-- v20260317-150445 spoken-vs-caption -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -402,6 +402,35 @@ function clearLog(id){var d=document.getElementById(id);if(d){d.style.display='n
 function easeOut(t){return 1-Math.pow(1-t,2.5);}
 function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
+// Convert text for Fish Audio — numbers/symbols as spoken words
+// Caption shows original, voice gets this version
+function toSpoken(text){
+  return text
+    .replace(/\$(\d+(?:,\d{3})*(?:\.\d+)?)/g, function(_,n){return n.replace(/,/g,'')+' dollars';})
+    .replace(/(\d+(?:,\d{3})*)%/g, function(_,n){return n.replace(/,/g,'')+' percent';})
+    .replace(/#(\d+)/g, 'number $1')
+    .replace(/(\d{4})/g, function(_,y){
+      var yr=parseInt(y);
+      if(yr>=2000&&yr<=2099){
+        var a=Math.floor((yr-2000)/10),b=(yr-2000)%10;
+        var tens=['','ten','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+        var ones=['','one','two','three','four','five','six','seven','eight','nine'];
+        if(yr===2000) return 'two thousand';
+        if(b===0) return 'twenty '+tens[a];
+        return 'twenty '+tens[a]+' '+ones[b];
+      }
+      return y;
+    })
+    .replace(/(\d+)/g, function(_,n){
+      var num=parseInt(n);
+      if(num===0) return 'zero';
+      if(num<20){var w=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];return w[num]||n;}
+      if(num<100){var tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];var t=Math.floor(num/10),o=num%10;var w=['','one','two','three','four','five','six','seven','eight','nine'];return tens[t]+(o?' '+w[o]:'');}
+      if(num<1000){var h=Math.floor(num/100),r=num%100;var hundreds=['','one','two','three','four','five','six','seven','eight','nine'];return hundreds[h]+' hundred'+(r?' and '+toSpoken(String(r)):'');}
+      return n; // keep large numbers as-is
+    });
+}
+
 // Convert AudioBuffer to WAV Blob for stitching
 function audioBufferToWav(buffer){
   var numCh=buffer.numberOfChannels;
@@ -548,20 +577,22 @@ async function generate(){
     if(eKey&&vId){
       setStep(3);setSt('Generating voice — chunk by chunk for perfect sync...',true,'gbar');
 
-      // Clean chunks
+      // Clean chunks — strip tags only, keep original text for CAPTIONS
       var cleanChunks=chunks.map(function(c){
         return c.w.replace(/[(][^)]*[)]/g,'').replace(/\s+/g,' ').trim();
       });
+      // Spoken versions for Fish Audio — numbers as words
+      var spokenChunks=cleanChunks.map(function(t){return toSpoken(t);});
 
       // Generate audio for each chunk individually
       var chunkAudios=[]; // array of {blob, duration} per chunk
       var allOk=true;
 
       for(var ci=0;ci<cleanChunks.length;ci++){
-        var phrase=cleanChunks[ci];
+        var phrase=spokenChunks[ci]||cleanChunks[ci];
         if(!phrase){chunkAudios.push(null);continue;}
         setSt('Generating voice '+(ci+1)+'/'+cleanChunks.length+'...',true,'gbar');
-        log('gdbg','→ Chunk '+(ci+1)+': "'+phrase+'"');
+        log('gdbg','→ Chunk '+(ci+1)+': "'+cleanChunks[ci]+'" → spoken: "'+phrase+'"');
         try{
           var cr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
             method:'POST',
@@ -1085,7 +1116,7 @@ function drawFrame(ms){
       // Bottom of block at 73%, top of block = bottom - bigFS - gap - topFS
       var blockBottom=H*0.73;
       var bottomY=blockBottom;
-      var topY=blockBottom - bigFS_measure - gap - topFontSize;
+      var topY=blockBottom - bigFS_measure*0.85 - gap - topFontSize*0.5;
 
       // Animate in from below
       var slideIn=(1-ease)*80;
