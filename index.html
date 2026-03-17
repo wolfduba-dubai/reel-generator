@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-142204 captionStyle-fix -->
+<!-- v20260317-143000 style4-no-repeat -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1084,80 +1084,53 @@ function drawFrame(ms){
       var slideIn=(1-ease)*80;
       topY+=slideIn;bottomY+=slideIn;
 
-      // TOP LINE — small faded uppercase (all words except highlighted)
-      var topWords=displayWords.filter(function(_,i){return i!==hiIdx;});
-      if(topWords.length===0) topWords=displayWords.slice(0,displayWords.length-1);
+      // TOP LINE — all words EXCEPT the highlighted word, small faded uppercase
+      var topWords=[];
+      if(hiIdx>=0&&hiIdx<displayWords.length){
+        topWords=displayWords.filter(function(_,i){return i!==hiIdx;});
+      } else {
+        // No highlight — all words except last go on top
+        topWords=displayWords.slice(0,Math.max(1,displayWords.length-1));
+      }
       var topText=topWords.join(' ').toUpperCase();
 
-      ctx.globalAlpha=ease*0.55;
-      ctx.font='700 56px Arial';
-      ctx.fillStyle='#ffffff';
-      ctx.textAlign='center';
-      ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=18;
-      // Scale if too wide
-      var topW=ctx.measureText(topText).width;
-      if(topW>W-120){
-        var topScale=(W-120)/topW;
-        ctx.font='700 '+(56*topScale)+'px Arial';
+      if(topText){
+        ctx.globalAlpha=ease*0.6;
+        ctx.font='700 58px Arial';
+        ctx.fillStyle='#ffffff';
+        ctx.textAlign='center';
+        ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=16;
+        var topW=ctx.measureText(topText).width;
+        if(topW>W-120) ctx.font='700 '+Math.floor(58*(W-120)/topW)+'px Arial';
+        ctx.fillText(topText,W/2,topY);
+        ctx.shadowBlur=0;
       }
-      ctx.fillText(topText,W/2,topY);
-      ctx.shadowBlur=0;
 
-      // BOTTOM LINE — big bold, highlighted word colored, rest white
-      var bigFS=148;
+      // BOTTOM LINE — ONLY the highlighted word, big + colored
+      var bigFS=160;
       ctx.globalAlpha=ease;
-
-      // Build bottom line word data
-      var bottomWords=hiIdx>=0&&hiIdx<displayWords.length
-        ? [displayWords[hiIdx]]
-        : [displayWords[displayWords.length-1]||displayWords[0]];
-
-      // Actually show the highlight word BIG + colored, and one context word
-      // Use full phrase for bottom if short, or just key word if long
-      var bottomText='';
       var bottomHiWord='';
       if(hiIdx>=0&&hiIdx<displayWords.length){
         bottomHiWord=displayWords[hiIdx].toUpperCase();
-        // Add one word before/after for context if exists
-        var prev=hiIdx>0?displayWords[hiIdx-1].toUpperCase():'';
-        var next=hiIdx<displayWords.length-1?displayWords[hiIdx+1].toUpperCase():'';
-        bottomText=prev?(prev+' '+bottomHiWord):(next?bottomHiWord+' '+next:bottomHiWord);
       } else {
         bottomHiWord=displayWords[displayWords.length-1].toUpperCase();
-        bottomText=bottomHiWord;
       }
 
       ctx.font='900 '+bigFS+'px Arial';
-      var totalBW=ctx.measureText(bottomText).width;
-      var bScale=totalBW>(W-80)?(W-80)/totalBW:1;
-      var bFS=bigFS*bScale;
+      var hiW=ctx.measureText(bottomHiWord).width;
+      var bFS=hiW>(W-80)?Math.floor(bigFS*(W-80)/hiW):bigFS;
       ctx.font='900 '+bFS+'px Arial';
 
-      // Draw each word in bottom line
-      var bWords=bottomText.split(' ');
-      var bWidths=bWords.map(function(w){return ctx.measureText(w).width;});
-      var bTotal=bWidths.reduce(function(a,b){return a+b;},0)+(bWords.length-1)*28*bScale;
-      var bx=W/2-bTotal/2;
-
-      bWords.forEach(function(word,wi){
-        var isHi=(word===bottomHiWord);
-        ctx.textAlign='left';
-        // Stroke for readability
-        ctx.strokeStyle='rgba(0,0,0,.9)';
-        ctx.lineWidth=10*bScale;
-        ctx.lineJoin='round';
-        ctx.strokeText(word,bx,bottomY);
-        if(isHi){
-          ctx.shadowColor=hiColor;ctx.shadowBlur=40;
-          ctx.fillStyle=hiColor;
-        } else {
-          ctx.fillStyle='#ffffff';
-          ctx.shadowBlur=0;
-        }
-        ctx.fillText(word,bx,bottomY);
-        ctx.shadowBlur=0;
-        bx+=bWidths[wi]+28*bScale;
-      });
+      // Stroke + colored fill
+      ctx.textAlign='center';
+      ctx.strokeStyle='rgba(0,0,0,.9)';
+      ctx.lineWidth=Math.round(bFS*0.07);
+      ctx.lineJoin='round';
+      ctx.strokeText(bottomHiWord,W/2,bottomY);
+      ctx.shadowColor=hiColor;ctx.shadowBlur=40;
+      ctx.fillStyle=hiColor;
+      ctx.fillText(bottomHiWord,W/2,bottomY);
+      ctx.shadowBlur=0;
     }
 
     ctx.globalAlpha=1;ctx.textAlign='center';
