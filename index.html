@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-175223 auto-hashtags-desc -->
+<!-- v20260317-175635 yt-hashtags-field -->
+<!-- OLD-v20260317-175223 auto-hashtags-desc -->
 <!-- OLD-v20260317-174651 yt-desc-hashtags -->
 <!-- OLD-v20260317-172039 bigger-gap -->
 <!-- OLD-v20260317-171057 style4-spacing -->
@@ -322,10 +323,13 @@ select option{background:#0e0e1c}
     <div class="yt-field" id="ytDesc"></div>
     <div class="yt-lbl">Tags</div>
     <div id="ytTags" style="margin-bottom:12px"></div>
+    <div class="yt-lbl">Hashtags for description</div>
+    <div class="yt-field" id="ytHashtags" style="margin-bottom:12px"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="cpbtn" onclick="copyEl('ytTitle','title')">Copy title</button>
       <button class="cpbtn" onclick="copyEl('ytDesc','description')">Copy description</button>
       <button class="cpbtn" id="cpTagsBtn" onclick="copyYtTags()">Copy tags</button>
+      <button class="cpbtn" onclick="copyEl('ytHashtags','hashtags')">Copy hashtags</button>
     </div>
     <div class="yt-tip"><strong>YT Shorts:</strong> Include <strong>#Shorts</strong> in title · Upload within 1 hour of IG post · 12–3 PM or 7–9 PM best time</div>
   </div>
@@ -1243,6 +1247,14 @@ function populateYT(){
   if(t) t.textContent=ytData.title||'';
   if(d) d.textContent=ytData.desc||'';
   if(ta){ta.innerHTML='';(ytData.tags||[]).forEach(function(tag){var s=document.createElement('span');s.className='yt-tag';s.textContent=tag;ta.appendChild(s);});}
+  // Hashtags field — first 5 tags as #hashtags + #Shorts
+  var hEl=document.getElementById('ytHashtags');
+  if(hEl){
+    var hashtags=(ytData.tags||[]).slice(0,5).map(function(t){
+      return '#'+t.replace(/[^a-zA-Z0-9]/g,'');
+    }).join(' ')+' #Shorts';
+    hEl.textContent=hashtags;
+  }
 }
 function copyEl(id,label){
   navigator.clipboard.writeText(document.getElementById(id).textContent).then(function(){
