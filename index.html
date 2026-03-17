@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-162725 remove-ffmpeg -->
+<!-- v20260317-163236 capturestream-direct -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1237,26 +1237,21 @@ function exportReel(){
   var tracks=Array.from(stream.getVideoTracks());
   var recAudio=null;
   if(audioUrl){
-    // Use direct audio capture — avoids AudioContext buzz/interference
     recAudio=new Audio(audioUrl);
     recAudio.crossOrigin='anonymous';
+    // Capture audio stream directly — no AudioContext processing, no buzz
     try{
-      var actx=new (window.AudioContext||window.webkitAudioContext)();
-      var src=actx.createMediaElementSource(recAudio);
-      var dest=actx.createMediaStreamDestination();
-      // Connect to both destination (speakers) and recorder
-      src.connect(actx.destination);
-      src.connect(dest);
-      dest.stream.getAudioTracks().forEach(function(t){tracks.push(t);});
+      var audioStream=recAudio.captureStream
+        ? recAudio.captureStream()
+        : recAudio.mozCaptureStream
+        ? recAudio.mozCaptureStream()
+        : null;
+      if(audioStream){
+        audioStream.getAudioTracks().forEach(function(t){tracks.push(t);});
+        log('gdbg','→ Audio captured via captureStream');
+      }
     }catch(e){
-      // Fallback: capture audio directly from element stream
-      try{
-        if(recAudio.captureStream){
-          recAudio.captureStream().getAudioTracks().forEach(function(t){tracks.push(t);});
-        } else if(recAudio.mozCaptureStream){
-          recAudio.mozCaptureStream().getAudioTracks().forEach(function(t){tracks.push(t);});
-        }
-      }catch(e2){log('gdbg','→ Audio capture fallback failed: '+e2.message);}
+      log('gdbg','→ captureStream failed: '+e.message);
     }
     recAudio.play();
   }
