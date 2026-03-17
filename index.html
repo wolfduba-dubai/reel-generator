@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-141651 style4-spacing-broll -->
+<!-- v20260317-142204 captionStyle-fix -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -332,6 +332,7 @@ select option{background:#0e0e1c}
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
 var chunks=[], igCaption='', ytData={title:'',desc:'',tags:[]};
+var captionStyle=4;
 var videoPool={};   // keyword -> HTMLVideoElement (preloaded)
 var chunkVideos=[]; // per-chunk video element reference
 var raf=null, previewAudio=null, startTime=null, playing=false;
