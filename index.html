@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-165357 audio-fix-sync-fix -->
+<!-- v20260317-165837 restored-good-version -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -194,7 +194,7 @@ select option{background:#0e0e1c}
   </div>
   <div class="lbl" style="margin-top:12px">Caption style</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px" id="styleGrid">
-    <div class="style-opt" id="st1" onclick="pickStyle(1)">
+    <div class="style-opt sel" id="st1" onclick="pickStyle(1)">
       <div class="st-preview" style="background:#111;border-radius:8px;padding:10px;text-align:center;margin-bottom:6px">
         <span style="font-size:13px;font-weight:900;color:#fff">most people </span>
         <span style="font-size:18px;font-weight:900;color:#c084fc;text-shadow:0 0 10px rgba(192,132,252,.6)">DON'T</span>
@@ -223,7 +223,7 @@ select option{background:#0e0e1c}
       <div style="font-size:10px;font-weight:700;color:var(--muted)">Style 3 — Dark Pill</div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">Background behind text</div>
     </div>
-    <div class="style-opt sel" id="st4" onclick="pickStyle(4)">
+    <div class="style-opt" id="st4" onclick="pickStyle(4)">
       <div class="st-preview" style="background:#111;border-radius:8px;padding:8px;text-align:center;margin-bottom:6px">
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.5);display:block;letter-spacing:.08em;text-transform:uppercase">the truth about</span>
         <span style="font-size:20px;font-weight:900;color:#fff;display:block">AI <span style="color:#f472b6">money</span></span>
@@ -286,18 +286,9 @@ select option{background:#0e0e1c}
           <button class="abtn abtn-s" onclick="doCopy(igCaption,'📋 Caption')">📋 Caption</button>
         </div>
         <div class="sbar" id="expSt"></div>
-        <div id="exportFmt" style="font-size:11px;margin-top:4px"></div>
         <div id="dlwrap" style="display:none;margin-top:6px">
-          <a id="dlLink" download="reel.webm" style="font-size:14px;color:#7c6dff;font-weight:800">⬇ Download Reel (WebM)</a>
-        </div>
-        <div id="convertWrap" style="display:none;margin-top:8px">
-          <div style="background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:12px 14px">
-            <div style="font-size:12px;font-weight:700;color:#00d4aa;margin-bottom:8px">📱 Post to Instagram — 2 options:</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.9">
-              <strong style="color:#fff">Option 1 (instant):</strong> Right click the downloaded file → Rename → change <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px">.webm</code> to <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px">.mp4</code> → upload to Instagram<br><br>
-              <strong style="color:#fff">Option 2 (if Option 1 fails):</strong> <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" style="color:#00d4aa;font-weight:700">cloudconvert.com →</a> upload WebM → convert to MP4 → download → post
-            </div>
-          </div>
+          <a id="dlLink" download="reel.webm" style="font-size:13px;color:#7c6dff;font-weight:700">⬇ Download Reel</a>
+          <div class="note" style="margin-top:4px">WebM · Convert free at cloudconvert.com if needed</div>
         </div>
         <div class="tip-box" style="margin-top:8px">
           <strong>After export:</strong> Instagram → add trending audio → post 🚀<br>
@@ -341,7 +332,6 @@ select option{background:#0e0e1c}
 <script>
 // ── STATE ─────────────────────────────────────────────────────────────────────
 var chunks=[], igCaption='', ytData={title:'',desc:'',tags:[]};
-var captionStyle=4;
 var videoPool={};   // keyword -> HTMLVideoElement (preloaded)
 var chunkVideos=[]; // per-chunk video element reference
 var raf=null, previewAudio=null, startTime=null, playing=false;
@@ -410,35 +400,6 @@ function log(id,msg){var d=document.getElementById(id);if(!d)return;d.style.disp
 function clearLog(id){var d=document.getElementById(id);if(d){d.style.display='none';d.innerHTML='';}}
 function easeOut(t){return 1-Math.pow(1-t,2.5);}
 function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
-
-// Convert text for Fish Audio — numbers/symbols as spoken words
-// Caption shows original, voice gets this version
-function toSpoken(text){
-  return text
-    .replace(/\$(\d+(?:,\d{3})*(?:\.\d+)?)/g, function(_,n){return n.replace(/,/g,'')+' dollars';})
-    .replace(/(\d+(?:,\d{3})*)%/g, function(_,n){return n.replace(/,/g,'')+' percent';})
-    .replace(/#(\d+)/g, 'number $1')
-    .replace(/(\d{4})/g, function(_,y){
-      var yr=parseInt(y);
-      if(yr>=2000&&yr<=2099){
-        var a=Math.floor((yr-2000)/10),b=(yr-2000)%10;
-        var tens=['','ten','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
-        var ones=['','one','two','three','four','five','six','seven','eight','nine'];
-        if(yr===2000) return 'two thousand';
-        if(b===0) return 'twenty '+tens[a];
-        return 'twenty '+tens[a]+' '+ones[b];
-      }
-      return y;
-    })
-    .replace(/(\d+)/g, function(_,n){
-      var num=parseInt(n);
-      if(num===0) return 'zero';
-      if(num<20){var w=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];return w[num]||n;}
-      if(num<100){var tens=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];var t=Math.floor(num/10),o=num%10;var w=['','one','two','three','four','five','six','seven','eight','nine'];return tens[t]+(o?' '+w[o]:'');}
-      if(num<1000){var h=Math.floor(num/100),r=num%100;var hundreds=['','one','two','three','four','five','six','seven','eight','nine'];return hundreds[h]+' hundred'+(r?' and '+toSpoken(String(r)):'');}
-      return n; // keep large numbers as-is
-    });
-}
 
 // Convert AudioBuffer to WAV Blob for stitching
 function audioBufferToWav(buffer){
@@ -565,7 +526,7 @@ async function generate(){
 
   // ── SCRIPT PROMPT ─────────────────────────────────────────────────────────
   // Key: each chunk gets a "visual" keyword for B-roll matching
-  var prompt='Create a '+dur+'-second Instagram Reel script about: "'+topic+'". Return ONLY a JSON object with no extra text:\n{"chunks":[{"w":"plain words only no tags","hi":-1,"hc":0,"visual":"abstract footage term"}],"ig_caption":"caption here","yt_title":"title #Shorts","yt_desc":"description","yt_tags":["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"]}\n\nIMPORTANT:\n- chunks: exactly '+targetChunks+' items\n- w: 2-4 words ONLY. NEVER add parentheses or brackets. Keep numbers and symbols as-is: write $100 not one hundred dollars, write 90% not ninety percent, write 2026 not twenty twenty six. The app converts them for voice automatically. Bad example: (excited) stop buying. Good example: stop buying $100\n- hi: word index to highlight (0,1,2 or -1). Use -1 for most chunks, hi>=0 every 4th chunk\n- hc: 0 or 1 alternating\n- visual: 2-3 words for abstract Pexels footage, no people, examples: "code screen dark" "money bills cash" "sunrise mountain" "dark storm clouds"\n- ig_caption: hook + 3 sentences + question + CTA + 20 hashtags\n- yt_title: keyword first under 80 chars ending #Shorts\n- yt_tags: exactly 12 plain strings no # symbol';
+  var prompt='Create a '+dur+'-second Instagram Reel script about: "'+topic+'". Return ONLY a JSON object with no extra text:\n{"chunks":[{"w":"plain words only no tags","hi":-1,"hc":0,"visual":"abstract footage term"}],"ig_caption":"caption here","yt_title":"title #Shorts","yt_desc":"description","yt_tags":["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"]}\n\nIMPORTANT:\n- chunks: exactly '+targetChunks+' items\n- w: 2-4 plain spoken words ONLY. NEVER add parentheses, brackets, or emotion words at start. Bad example: (excited) stop buying. Good example: stop buying bitcoin\n- hi: word index to highlight (0,1,2 or -1). Use -1 for most chunks, hi>=0 every 4th chunk\n- hc: 0 or 1 alternating\n- visual: 2-3 words for abstract Pexels footage, no people, examples: "code screen dark" "money bills cash" "sunrise mountain" "dark storm clouds"\n- ig_caption: hook + 3 sentences + question + CTA + 20 hashtags\n- yt_title: keyword first under 80 chars ending #Shorts\n- yt_tags: exactly 12 plain strings no # symbol';
 
   try{
     var raw=await claude(aKey,prompt,2500,'gdbg');
@@ -582,76 +543,119 @@ async function generate(){
     chunks.forEach(function(c){c.start=t;c.end=t+placeholderPer-60;t+=placeholderPer;});
     log('gdbg','→ Placeholder timing — waiting for audio to sync...');
 
-    // Fish Audio voice — single request, clean audio, no stitching buzz
+    // Fish Audio voice — generate each chunk separately for perfect sync
     if(eKey&&vId){
-      setStep(3);setSt('Generating your voice...',true,'gbar');
+      setStep(3);setSt('Generating voice — chunk by chunk for perfect sync...',true,'gbar');
 
-      // Clean chunks for display (keep original symbols like $100)
+      // Clean chunks
       var cleanChunks=chunks.map(function(c){
         return c.w.replace(/[(][^)]*[)]/g,'').replace(/\s+/g,' ').trim();
       });
 
-      // Build spoken script — convert symbols to words for Fish Audio
-      var spokenScript=cleanChunks.map(function(t){return toSpoken(t);}).join(' ');
-      log('gdbg','→ Script: '+spokenScript.substring(0,100)+'...');
+      // Generate audio for each chunk individually
+      var chunkAudios=[]; // array of {blob, duration} per chunk
+      var allOk=true;
 
-      try{
-        var vr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({text:spokenScript,reference_id:vId,api_key:eKey})
-        });
-        log('gdbg','→ Status: '+vr.status);
-        if(vr.ok){
-          var audioData=await vr.arrayBuffer();
-          log('gdbg','→ Bytes: '+audioData.byteLength);
-          if(audioData.byteLength>500){
-            audioUrl=URL.createObjectURL(new Blob([audioData],{type:'audio/mpeg'}));
-
-            // Measure actual audio duration then sync captions
-            await new Promise(function(resolve){
-              var tmp=new Audio(audioUrl);
-              tmp.addEventListener('loadedmetadata',function(){
-                var totalDurMs=tmp.duration*1000;
-                log('gdbg','→ Audio duration: '+tmp.duration.toFixed(2)+'s');
-                if(totalDurMs>500){
-                  // Split audio duration evenly across chunks
-                  // Even split is more reliable than character count for Fish Audio
-                  var perChunk=totalDurMs/chunks.length;
-                  var t=0;
-                  chunks.forEach(function(c){
-                    c.start=Math.round(t);
-                    c.end=Math.round(t+perChunk-50);
-                    t+=perChunk;
-                  });
-                  log('gdbg','→ Captions: '+chunks.length+' chunks x '+(perChunk/1000).toFixed(2)+'s = '+tmp.duration.toFixed(1)+'s total');
-                }
-                resolve();
+      for(var ci=0;ci<cleanChunks.length;ci++){
+        var phrase=cleanChunks[ci];
+        if(!phrase){chunkAudios.push(null);continue;}
+        setSt('Generating voice '+(ci+1)+'/'+cleanChunks.length+'...',true,'gbar');
+        log('gdbg','→ Chunk '+(ci+1)+': "'+phrase+'"');
+        try{
+          var cr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({text:phrase,reference_id:vId,api_key:eKey})
+          });
+          if(cr.ok){
+            var cdata=await cr.arrayBuffer();
+            if(cdata.byteLength>200){
+              var cblob=new Blob([cdata],{type:'audio/mpeg'});
+              // Measure exact duration of this chunk
+              var cdur=await new Promise(function(resolve){
+                var a=new Audio(URL.createObjectURL(cblob));
+                a.addEventListener('loadedmetadata',function(){resolve(a.duration*1000);});
+                a.addEventListener('error',function(){resolve(800);});
+                a.load();setTimeout(function(){resolve(800);},3000);
               });
-              tmp.addEventListener('error',function(){resolve();});
-              tmp.load();
-              setTimeout(resolve,5000);
-            });
-
-            var iv=document.getElementById('infoV');
-            if(iv){iv.textContent='✓ Your voice';iv.className='ib-val ok';}
-            log('gdbg','→ Voice ready!');
+              chunkAudios.push({blob:cblob,duration:cdur});
+              log('gdbg','→ Chunk '+(ci+1)+' = '+cdur.toFixed(0)+'ms');
+            } else {
+              chunkAudios.push(null);
+              log('gdbg','→ Chunk '+(ci+1)+' too small, skipping');
+            }
           } else {
-            var decoded=new TextDecoder().decode(audioData);
-            log('gdbg','→ Error response: '+decoded.substring(0,200));
+            chunkAudios.push(null);
+            log('gdbg','→ Chunk '+(ci+1)+' failed: '+cr.status);
+            allOk=false;
           }
-        } else {
-          var errBody=await vr.text();
-          log('gdbg','→ FAILED '+vr.status+': '+errBody.substring(0,300));
-          document.getElementById('gdbg').style.display='block';
+        }catch(ce){
+          chunkAudios.push(null);
+          log('gdbg','→ Chunk '+(ci+1)+' error: '+ce.message);
         }
-      }catch(ve){
-        log('gdbg','→ Exception: '+ve.message);
-        document.getElementById('gdbg').style.display='block';
+        // Small delay between requests
+        if(ci<cleanChunks.length-1) await delay(150);
+      }
+
+      // Now we know exact duration of each chunk — set caption timings perfectly
+      var t=0;
+      chunks.forEach(function(c,i){
+        var ca=chunkAudios[i];
+        var dur=ca?ca.duration:1500;
+        c.start=t;
+        c.end=t+dur-30;
+        t+=dur;
+      });
+      log('gdbg','→ Total audio: '+(t/1000).toFixed(1)+'s across '+chunks.length+' chunks');
+
+      // Stitch all audio blobs into one using AudioContext
+      setSt('Stitching audio...',true,'gbar');
+      try{
+        var actx=new AudioContext();
+        var buffers=[];
+        for(var bi=0;bi<chunkAudios.length;bi++){
+          if(!chunkAudios[bi]){
+            // Silent gap for missing chunks
+            var silence=actx.createBuffer(1,actx.sampleRate*0.8,actx.sampleRate);
+            buffers.push(silence);
+            continue;
+          }
+          var ab=await chunkAudios[bi].blob.arrayBuffer();
+          try{
+            var decoded=await actx.decodeAudioData(ab);
+            buffers.push(decoded);
+          }catch(e){
+            var silence=actx.createBuffer(1,actx.sampleRate*0.8,actx.sampleRate);
+            buffers.push(silence);
+          }
+        }
+        // Calculate total samples
+        var totalSamples=buffers.reduce(function(a,b){return a+b.length;},0);
+        var combined=actx.createBuffer(1,totalSamples,actx.sampleRate);
+        var channel=combined.getChannelData(0);
+        var offset=0;
+        buffers.forEach(function(b){
+          channel.set(b.getChannelData(0),offset);
+          offset+=b.length;
+        });
+        // Convert to wav blob
+        var wavBlob=audioBufferToWav(combined);
+        audioUrl=URL.createObjectURL(wavBlob);
+        log('gdbg','→ Audio stitched! '+buffers.length+' chunks combined');
+        var iv=document.getElementById('infoV');
+        if(iv){iv.textContent='✓ Your voice (synced)';iv.className='ib-val ok';}
+      }catch(se){
+        log('gdbg','→ Stitch error: '+se.message+' — using first chunk only');
+        // Fallback: just use first chunk audio
+        if(chunkAudios[0]){
+          audioUrl=URL.createObjectURL(chunkAudios[0].blob);
+          var iv=document.getElementById('infoV');
+          if(iv){iv.textContent='✓ Voice (partial)';iv.className='ib-val warn';}
+        }
       }
     }
 
-        // Show output section
+    // Show output section
     document.getElementById('outSection').style.display='block';
     document.getElementById('infoD').textContent=dur+'s';
     document.getElementById('infoW').textContent=chunks.length+' phrases';
@@ -867,18 +871,16 @@ function getChunk(ms){
   var lastEnd=chunks[chunks.length-1].end;
   // Outro starts 200ms after last chunk — give final caption time to show
   var outroStart=lastEnd+200;
-  if(ms>=outroStart) return {c:null,p:Math.min(1,(ms-outroStart)/3000),outro:true,idx:-1,brollIdx:0};
-  // B-roll group: switch clip every ~4 chunks (~6s) not every chunk
-  var grpSize=Math.max(3,Math.ceil(chunks.length/5));
+  if(ms>=outroStart) return {c:null,p:Math.min(1,(ms-outroStart)/3000),outro:true,idx:-1};
   for(var i=0;i<chunks.length;i++){
-    if(ms>=chunks[i].start&&ms<=chunks[i].end){
-      return {c:chunks[i],p:(ms-chunks[i].start)/(chunks[i].end-chunks[i].start),outro:false,idx:i,brollIdx:Math.floor(i/grpSize)};
-    }
+    if(ms>=chunks[i].start&&ms<=chunks[i].end)
+      return {c:chunks[i],p:(ms-chunks[i].start)/(chunks[i].end-chunks[i].start),outro:false,idx:i};
   }
+  // Between chunks — show previous
   for(var i=chunks.length-1;i>=0;i--){
-    if(ms>chunks[i].end) return {c:chunks[i],p:1,outro:false,idx:i,brollIdx:Math.floor(i/grpSize)};
+    if(ms>chunks[i].end) return {c:chunks[i],p:1,outro:false,idx:i};
   }
-  return {c:chunks[0],p:0,outro:false,idx:0,brollIdx:0};
+  return {c:chunks[0],p:0,outro:false,idx:0};
 }
 
 // Track which video is currently playing to avoid restart flicker
@@ -892,32 +894,27 @@ function drawFrame(ms){
   var info=getChunk(ms);
   var bgVid=null;
 
-  // B-roll: switch clip every sentence (every chunk) but play continuously
-  // Each unique clip plays from where it left off — no restart flicker
-  if(info&&!info.outro&&info.idx>=0){
-    // Each chunk maps to one of the 5 clips cyclically
-    var clipIdx=info.idx % Math.min(5,chunkVideos.length);
-    bgVid=chunkVideos[info.idx]||chunkVideos[clipIdx]||null;
-
-    // Switch clip when chunk changes
+  if(info&&!info.outro&&info.idx>=0&&chunkVideos[info.idx]){
+    bgVid=chunkVideos[info.idx];
+    // Switch video on new chunk
     if(info.idx!==currentVidIdx){
       currentVidIdx=info.idx;
-      // Play the new clip, pause others
+      // Pause all others, play this one
       var seen={};
-      chunkVideos.forEach(function(v,vi){
-        if(!v||seen[v.src]) return;
-        seen[v.src]=true;
-        if(v===bgVid){
-          // Resume without restarting — feels more cinematic
+      chunkVideos.forEach(function(v,i){
+        if(!v) return;
+        if(i===info.idx){
           if(v.paused) v.play();
-        } else {
-          if(!v.paused) v.pause();
+        } else if(!seen[v.src]){
+          seen[v.src]=true;
+          // Only pause if it's a different video element
+          if(v!==bgVid&&!v.paused) v.pause();
         }
       });
     }
   } else if(info&&info.outro&&chunkVideos.length){
+    // Outro: use last chunk's video
     bgVid=chunkVideos[chunkVideos.length-1];
-    if(bgVid&&bgVid.paused) bgVid.play();
   }
 
   // Draw background
@@ -1072,74 +1069,22 @@ function drawFrame(ms){
       });
 
     } else {
-      // STYLE 4: Split — small faded uppercase + big bold colored word
-      // Lower third position — professional reel style
-      // Position as ONE unit — top and bottom close together
-      // Center the whole block around 68% down screen
-      var bigFS_measure=160;
-      var topFontSize=58;
-      var gap=20; // px gap between lines at full scale
-      // Bottom of block at 73%, top of block = bottom - bigFS - gap - topFS
-      var blockBottom=H*0.73;
-      var bottomY=blockBottom;
-      var topY=blockBottom - bigFS_measure*0.85 - gap - topFontSize*0.5;
-
-      // Animate in from below
-      var slideIn=(1-ease)*80;
-      topY+=slideIn;bottomY+=slideIn;
-
-      // TOP LINE — all words EXCEPT the highlighted word, small faded uppercase
-      var topWords=[];
-      if(hiIdx>=0&&hiIdx<displayWords.length){
-        topWords=displayWords.filter(function(_,i){return i!==hiIdx;});
-      } else {
-        // No highlight — all words except last go on top
-        topWords=displayWords.slice(0,Math.max(1,displayWords.length-1));
+      // STYLE 4: Split — small faded text above + big bold word centered
+      var centerY=H*0.5+(1-ease)*60;
+      var bigWord=(hiIdx>=0&&hiIdx<displayWords.length?displayWords[hiIdx]:displayWords[displayWords.length-1]||'').toUpperCase();
+      var smallWords=displayWords.filter(function(_,i){return i!==(hiIdx>=0?hiIdx:displayWords.length-1);});
+      if(smallWords.length){
+        ctx.globalAlpha=ease*0.5;ctx.font='700 52px Arial';ctx.fillStyle='#fff';ctx.textAlign='center';
+        ctx.shadowColor='rgba(0,0,0,.9)';ctx.shadowBlur=14;
+        ctx.fillText(smallWords.join(' ').toUpperCase(),W/2,centerY-80);ctx.shadowBlur=0;
       }
-      var topText=topWords.join(' ').toUpperCase();
-
-      if(topText){
-        ctx.globalAlpha=ease;
-        ctx.font='700 58px Arial';
-        ctx.textAlign='center';
-        var topW=ctx.measureText(topText).width;
-        var topFS=58;
-        if(topW>W-120){topFS=Math.floor(58*(W-120)/topW);ctx.font='700 '+topFS+'px Arial';}
-        // Stroke for readability on any background
-        ctx.strokeStyle='rgba(0,0,0,.9)';
-        ctx.lineWidth=Math.round(topFS*0.06);
-        ctx.lineJoin='round';
-        ctx.strokeText(topText,W/2,topY);
-        // White fill — full opacity, clear
-        ctx.fillStyle='rgba(255,255,255,0.85)';
-        ctx.fillText(topText,W/2,topY);
-      }
-
-      // BOTTOM LINE — ONLY the highlighted word, big + colored
-      var bigFS=160;
-      ctx.globalAlpha=ease;
-      var bottomHiWord='';
-      if(hiIdx>=0&&hiIdx<displayWords.length){
-        bottomHiWord=displayWords[hiIdx].toUpperCase();
-      } else {
-        bottomHiWord=displayWords[displayWords.length-1].toUpperCase();
-      }
-
-      ctx.font='900 '+bigFS+'px Arial';
-      var hiW=ctx.measureText(bottomHiWord).width;
-      var bFS=hiW>(W-80)?Math.floor(bigFS*(W-80)/hiW):bigFS;
-      ctx.font='900 '+bFS+'px Arial';
-
-      // Stroke + colored fill
-      ctx.textAlign='center';
-      ctx.strokeStyle='rgba(0,0,0,.9)';
-      ctx.lineWidth=Math.round(bFS*0.07);
-      ctx.lineJoin='round';
-      ctx.strokeText(bottomHiWord,W/2,bottomY);
-      ctx.shadowColor=hiColor;ctx.shadowBlur=40;
-      ctx.fillStyle=hiColor;
-      ctx.fillText(bottomHiWord,W/2,bottomY);
-      ctx.shadowBlur=0;
+      ctx.globalAlpha=ease;ctx.font='900 172px Arial';
+      var bw=ctx.measureText(bigWord).width,bsc=bw>(W-80)?(W-80)/bw:1;
+      ctx.font='900 '+(172*bsc)+'px Arial';
+      ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=10*bsc;ctx.lineJoin='round';
+      ctx.shadowColor=hiColor;ctx.shadowBlur=30;
+      ctx.strokeText(bigWord,W/2,centerY+20);
+      ctx.fillStyle=hiColor;ctx.fillText(bigWord,W/2,centerY+20);ctx.shadowBlur=0;
     }
 
     ctx.globalAlpha=1;ctx.textAlign='center';
@@ -1209,7 +1154,7 @@ function restartReel(){
 }
 
 // ── EXPORT ────────────────────────────────────────────────────────────────────
-async function exportReel(){
+function exportReel(){
   if(playing){playing=false;cancelAnimationFrame(raf);}
   if(previewAudio){previewAudio.pause();previewAudio=null;}
   chunkVideos.forEach(function(v){if(v){v.currentTime=0;v.pause();}});
@@ -1225,50 +1170,26 @@ async function exportReel(){
   var tracks=Array.from(stream.getVideoTracks());
   var recAudio=null;
   if(audioUrl){
-    recAudio=new Audio(audioUrl);
-    recAudio.volume=1.0;
-    // Must play AFTER adding to stream to avoid Chrome timing bug
+    recAudio=new Audio(audioUrl);recAudio.play();
     try{
-      var actx=new (window.AudioContext||window.webkitAudioContext)();
-      // Resume context if suspended (Chrome autoplay policy)
-      if(actx.state==='suspended') await actx.resume();
+      var actx=new AudioContext();
       var asrc=actx.createMediaElementSource(recAudio);
       var dest=actx.createMediaStreamDestination();
-      asrc.connect(dest);
-      asrc.connect(actx.destination);
-      dest.stream.getAudioTracks().forEach(function(t){
-        tracks.push(t);
-        log('gdbg','→ Audio track added: '+t.label);
-      });
-      log('gdbg','→ AudioContext state: '+actx.state);
-    }catch(e){
-      log('gdbg','→ AudioContext error: '+e.message);
-    }
-    recAudio.play().then(function(){
-      log('gdbg','→ Audio playing OK');
-    }).catch(function(e){
-      log('gdbg','→ Audio play error: '+e.message);
-    });
+      asrc.connect(dest);asrc.connect(actx.destination);
+      dest.stream.getAudioTracks().forEach(function(t){tracks.push(t);});
+    }catch(e){}
   }
 
   var combined=new MediaStream(tracks),recChunks=[];
-  // Force WebM — this is what gives clean audio
-  var mime='video/webm;codecs=vp9';
-  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
-  log('gdbg','→ Recording as WebM');
+  var mime=MediaRecorder.isTypeSupported('video/webm;codecs=vp9')?'video/webm;codecs=vp9':'video/webm';
   var mr=new MediaRecorder(combined,{mimeType:mime});
   mr.ondataavailable=function(e){if(e.data&&e.data.size>0)recChunks.push(e.data);};
   mr.onstop=function(){
     var blob=new Blob(recChunks,{type:'video/webm'});
-    var url=URL.createObjectURL(blob);
-    document.getElementById('dlLink').href=url;
+    document.getElementById('dlLink').href=URL.createObjectURL(blob);
     document.getElementById('dlLink').download='reel-'+Date.now()+'.webm';
     document.getElementById('dlwrap').style.display='block';
-    setSt('✓ WebM ready! Download below 🔥',false,'expSt');
-    var fmtEl=document.getElementById('exportFmt');
-    if(fmtEl){fmtEl.textContent='✓ WebM — rename to .mp4 for Instagram';fmtEl.style.color='#00d4aa';}
-    var cw=document.getElementById('convertWrap');
-    if(cw) cw.style.display='block';
+    setSt('Reel ready! Download below 🔥',false,'expSt');
     document.getElementById('exportBtn').disabled=false;
     if(recAudio) recAudio.pause();
     if(raf){cancelAnimationFrame(raf);raf=null;}
