@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-153519 audio-fade-fix -->
+<!-- v20260317-154439 single-audio-broll-per-sentence -->
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
@@ -582,131 +582,86 @@ async function generate(){
     chunks.forEach(function(c){c.start=t;c.end=t+placeholderPer-60;t+=placeholderPer;});
     log('gdbg','→ Placeholder timing — waiting for audio to sync...');
 
-    // Fish Audio voice — generate each chunk separately for perfect sync
+    // Fish Audio voice — single request, clean audio, no stitching buzz
     if(eKey&&vId){
-      setStep(3);setSt('Generating voice — chunk by chunk for perfect sync...',true,'gbar');
+      setStep(3);setSt('Generating your voice...',true,'gbar');
 
-      // Clean chunks — strip tags only, keep original text for CAPTIONS
+      // Clean chunks for display (keep original symbols like $100)
       var cleanChunks=chunks.map(function(c){
         return c.w.replace(/[(][^)]*[)]/g,'').replace(/\s+/g,' ').trim();
       });
-      // Spoken versions for Fish Audio — numbers as words
-      var spokenChunks=cleanChunks.map(function(t){return toSpoken(t);});
 
-      // Generate audio for each chunk individually
-      var chunkAudios=[]; // array of {blob, duration} per chunk
-      var allOk=true;
+      // Build spoken script — convert symbols to words for Fish Audio
+      var spokenScript=cleanChunks.map(function(t){return toSpoken(t);}).join(' ');
+      log('gdbg','→ Script: '+spokenScript.substring(0,100)+'...');
 
-      for(var ci=0;ci<cleanChunks.length;ci++){
-        var phrase=spokenChunks[ci]||cleanChunks[ci];
-        if(!phrase){chunkAudios.push(null);continue;}
-        setSt('Generating voice '+(ci+1)+'/'+cleanChunks.length+'...',true,'gbar');
-        log('gdbg','→ Chunk '+(ci+1)+': "'+cleanChunks[ci]+'" → spoken: "'+phrase+'"');
-        try{
-          var cr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
-            method:'POST',
-            headers:{'Content-Type':'application/json'},
-            body:JSON.stringify({text:phrase,reference_id:vId,api_key:eKey})
-          });
-          if(cr.ok){
-            var cdata=await cr.arrayBuffer();
-            if(cdata.byteLength>200){
-              var cblob=new Blob([cdata],{type:'audio/mpeg'});
-              // Measure exact duration of this chunk
-              var cdur=await new Promise(function(resolve){
-                var a=new Audio(URL.createObjectURL(cblob));
-                a.addEventListener('loadedmetadata',function(){resolve(a.duration*1000);});
-                a.addEventListener('error',function(){resolve(800);});
-                a.load();setTimeout(function(){resolve(800);},3000);
-              });
-              chunkAudios.push({blob:cblob,duration:cdur});
-              log('gdbg','→ Chunk '+(ci+1)+' = '+cdur.toFixed(0)+'ms');
-            } else {
-              chunkAudios.push(null);
-              log('gdbg','→ Chunk '+(ci+1)+' too small, skipping');
-            }
-          } else {
-            chunkAudios.push(null);
-            log('gdbg','→ Chunk '+(ci+1)+' failed: '+cr.status);
-            allOk=false;
-          }
-        }catch(ce){
-          chunkAudios.push(null);
-          log('gdbg','→ Chunk '+(ci+1)+' error: '+ce.message);
-        }
-        // Small delay between requests
-        if(ci<cleanChunks.length-1) await delay(150);
-      }
-
-      // Now we know exact duration of each chunk — set caption timings perfectly
-      var t=0;
-      chunks.forEach(function(c,i){
-        var ca=chunkAudios[i];
-        var dur=ca?ca.duration:1500;
-        c.start=t;
-        c.end=t+dur-30;
-        t+=dur;
-      });
-      log('gdbg','→ Total audio: '+(t/1000).toFixed(1)+'s across '+chunks.length+' chunks');
-
-      // Stitch all audio blobs into one using AudioContext
-      setSt('Stitching audio...',true,'gbar');
       try{
-        var actx=new AudioContext();
-        var buffers=[];
-        for(var bi=0;bi<chunkAudios.length;bi++){
-          if(!chunkAudios[bi]){
-            // Silent gap for missing chunks
-            var silence=actx.createBuffer(1,actx.sampleRate*0.8,actx.sampleRate);
-            buffers.push(silence);
-            continue;
-          }
-          var ab=await chunkAudios[bi].blob.arrayBuffer();
-          try{
-            var decoded=await actx.decodeAudioData(ab);
-            buffers.push(decoded);
-          }catch(e){
-            var silence=actx.createBuffer(1,actx.sampleRate*0.8,actx.sampleRate);
-            buffers.push(silence);
-          }
-        }
-        // Stitch buffers with fade in/out on each chunk to prevent clicks/buzzing
-        var fadeLen=Math.floor(actx.sampleRate*0.008); // 8ms fade
-        var totalSamples=buffers.reduce(function(a,b){return a+b.length;},0);
-        var combined=actx.createBuffer(1,totalSamples,actx.sampleRate);
-        var channel=combined.getChannelData(0);
-        var offset=0;
-        buffers.forEach(function(b){
-          var src=b.getChannelData(0);
-          var len=src.length;
-          for(var si=0;si<len;si++){
-            var s=src[si];
-            // Fade in at start of chunk
-            if(si<fadeLen) s*=(si/fadeLen);
-            // Fade out at end of chunk
-            if(si>len-fadeLen) s*=((len-si)/fadeLen);
-            channel[offset+si]=s;
-          }
-          offset+=len;
+        var vr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({text:spokenScript,reference_id:vId,api_key:eKey})
         });
-        // Convert to wav blob
-        var wavBlob=audioBufferToWav(combined);
-        audioUrl=URL.createObjectURL(wavBlob);
-        log('gdbg','→ Audio stitched! '+buffers.length+' chunks combined');
-        var iv=document.getElementById('infoV');
-        if(iv){iv.textContent='✓ Your voice (synced)';iv.className='ib-val ok';}
-      }catch(se){
-        log('gdbg','→ Stitch error: '+se.message+' — using first chunk only');
-        // Fallback: just use first chunk audio
-        if(chunkAudios[0]){
-          audioUrl=URL.createObjectURL(chunkAudios[0].blob);
-          var iv=document.getElementById('infoV');
-          if(iv){iv.textContent='✓ Voice (partial)';iv.className='ib-val warn';}
+        log('gdbg','→ Status: '+vr.status);
+        if(vr.ok){
+          var audioData=await vr.arrayBuffer();
+          log('gdbg','→ Bytes: '+audioData.byteLength);
+          if(audioData.byteLength>500){
+            audioUrl=URL.createObjectURL(new Blob([audioData],{type:'audio/mpeg'}));
+
+            // Measure actual audio duration then sync captions
+            await new Promise(function(resolve){
+              var tmp=new Audio(audioUrl);
+              tmp.addEventListener('loadedmetadata',function(){
+                var totalDurMs=tmp.duration*1000;
+                log('gdbg','→ Audio duration: '+tmp.duration.toFixed(2)+'s');
+                if(totalDurMs>500){
+                  // Distribute captions by character count — more chars = more time
+                  var totalChars=cleanChunks.reduce(function(a,c){return a+c.length;},0);
+                  var msPerChar=totalDurMs/totalChars;
+                  var t=0;
+                  chunks.forEach(function(c,i){
+                    var chars=Math.max(4,cleanChunks[i]?cleanChunks[i].length:4);
+                    var ct=Math.round(msPerChar*chars);
+                    ct=Math.max(700,Math.min(3000,ct));
+                    c.start=t;
+                    c.end=t+ct-30;
+                    t+=ct;
+                  });
+                  // Normalize to exact audio duration
+                  var lastEnd=chunks[chunks.length-1].end;
+                  var scale=totalDurMs/lastEnd;
+                  chunks.forEach(function(c){
+                    c.start=Math.round(c.start*scale);
+                    c.end=Math.round(c.end*scale);
+                  });
+                  log('gdbg','→ Captions synced to '+tmp.duration.toFixed(1)+'s');
+                }
+                resolve();
+              });
+              tmp.addEventListener('error',function(){resolve();});
+              tmp.load();
+              setTimeout(resolve,5000);
+            });
+
+            var iv=document.getElementById('infoV');
+            if(iv){iv.textContent='✓ Your voice';iv.className='ib-val ok';}
+            log('gdbg','→ Voice ready!');
+          } else {
+            var decoded=new TextDecoder().decode(audioData);
+            log('gdbg','→ Error response: '+decoded.substring(0,200));
+          }
+        } else {
+          var errBody=await vr.text();
+          log('gdbg','→ FAILED '+vr.status+': '+errBody.substring(0,300));
+          document.getElementById('gdbg').style.display='block';
         }
+      }catch(ve){
+        log('gdbg','→ Exception: '+ve.message);
+        document.getElementById('gdbg').style.display='block';
       }
     }
 
-    // Show output section
+        // Show output section
     document.getElementById('outSection').style.display='block';
     document.getElementById('infoD').textContent=dur+'s';
     document.getElementById('infoW').textContent=chunks.length+' phrases';
@@ -947,30 +902,32 @@ function drawFrame(ms){
   var info=getChunk(ms);
   var bgVid=null;
 
-  // Use brollIdx for video switching — changes every ~4 chunks (~6s) not every chunk
-  var brollIdx=info?(info.brollIdx||0):0;
-  if(info&&!info.outro&&chunkVideos[info.idx]){
-    bgVid=chunkVideos[info.idx];
-    // Only switch video when brollIdx changes
-    if(brollIdx!==currentVidIdx){
-      currentVidIdx=brollIdx;
-      // Find the video for this group
-      var groupStart=brollIdx*Math.max(3,Math.ceil(chunks.length/5));
-      var groupVid=chunkVideos[Math.min(groupStart,chunkVideos.length-1)];
-      if(groupVid){
-        bgVid=groupVid;
-        // Pause all, play this one from start
-        var seenSrcs={};
-        chunkVideos.forEach(function(v){
-          if(!v||seenSrcs[v.src]) return;
-          seenSrcs[v.src]=true;
-          if(v===groupVid){if(v.paused){v.currentTime=0;v.play();}}
-          else if(!v.paused) v.pause();
-        });
-      }
+  // B-roll: switch clip every sentence (every chunk) but play continuously
+  // Each unique clip plays from where it left off — no restart flicker
+  if(info&&!info.outro&&info.idx>=0){
+    // Each chunk maps to one of the 5 clips cyclically
+    var clipIdx=info.idx % Math.min(5,chunkVideos.length);
+    bgVid=chunkVideos[info.idx]||chunkVideos[clipIdx]||null;
+
+    // Switch clip when chunk changes
+    if(info.idx!==currentVidIdx){
+      currentVidIdx=info.idx;
+      // Play the new clip, pause others
+      var seen={};
+      chunkVideos.forEach(function(v,vi){
+        if(!v||seen[v.src]) return;
+        seen[v.src]=true;
+        if(v===bgVid){
+          // Resume without restarting — feels more cinematic
+          if(v.paused) v.play();
+        } else {
+          if(!v.paused) v.pause();
+        }
+      });
     }
   } else if(info&&info.outro&&chunkVideos.length){
     bgVid=chunkVideos[chunkVideos.length-1];
+    if(bgVid&&bgVid.paused) bgVid.play();
   }
 
   // Draw background
