@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-163236 capturestream-direct -->
+<!-- v20260317-164131 webm-only -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -282,15 +282,13 @@ select option{background:#0e0e1c}
           <div class="info-box"><div class="ib-lbl">B-roll clips</div><div class="ib-val ok" id="infoB">Loading...</div></div>
         </div>
         <div class="act-row">
-          <button class="abtn abtn-p" id="exportBtn" onclick="exportReel()">⬇ Export WebM</button>
-          <button class="abtn abtn-p" id="exportMp4Btn" onclick="exportMp4()" style="display:none">⬇ Export MP4</button>
+          <button class="abtn abtn-p" id="exportBtn" onclick="exportReel()">⬇ Export Reel</button>
           <button class="abtn abtn-s" onclick="doCopy(igCaption,'📋 Caption')">📋 Caption</button>
         </div>
         <div class="sbar" id="expSt"></div>
         <div id="exportFmt" style="font-size:11px;margin-top:4px"></div>
         <div id="dlwrap" style="display:none;margin-top:6px">
-          <a id="dlLink" download="reel.mp4" style="font-size:14px;color:#7c6dff;font-weight:800">⬇ Download Reel</a>
-          <div class="note" style="margin-top:4px">If WebM: click Convert below</div>
+          <a id="dlLink" download="reel.webm" style="font-size:14px;color:#7c6dff;font-weight:800">⬇ Download Reel (WebM)</a>
         </div>
         <div id="convertWrap" style="display:none;margin-top:8px">
           <div style="background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:12px 14px">
@@ -1257,34 +1255,22 @@ function exportReel(){
   }
 
   var combined=new MediaStream(tracks),recChunks=[];
-  // Try MP4 first (works on Chrome Windows), fall back to WebM
-  var mime='video/webm';
+  // Always use WebM — clean audio, no buzz
+  var mime='video/webm;codecs=vp9';
+  if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
   var isMp4=false;
-  if(MediaRecorder.isTypeSupported('video/mp4;codecs=avc1')){
-    mime='video/mp4;codecs=avc1';isMp4=true;
-  } else if(MediaRecorder.isTypeSupported('video/mp4')){
-    mime='video/mp4';isMp4=true;
-  } else if(MediaRecorder.isTypeSupported('video/webm;codecs=vp9')){
-    mime='video/webm;codecs=vp9';
-  }
   log('gdbg','→ Recording format: '+mime);
   var mr=new MediaRecorder(combined,{mimeType:mime});
   mr.ondataavailable=function(e){if(e.data&&e.data.size>0)recChunks.push(e.data);};
   mr.onstop=function(){
-    var ext=isMp4?'mp4':'webm';
-    var type=isMp4?'video/mp4':'video/webm';
-    var blob=new Blob(recChunks,{type:type});
+    var blob=new Blob(recChunks,{type:'video/webm'});
     var url=URL.createObjectURL(blob);
     document.getElementById('dlLink').href=url;
-    document.getElementById('dlLink').download='reel-'+Date.now()+'.'+ext;
+    document.getElementById('dlLink').download='reel-'+Date.now()+'.webm';
     document.getElementById('dlwrap').style.display='block';
-    var msg=isMp4?'✓ MP4 ready! Download and post 🔥':'WebM recorded — click Convert to MP4 below';
-    setSt(msg,false,'expSt');
-    // Show format badge
+    setSt('✓ WebM ready! Download below 🔥',false,'expSt');
     var fmtEl=document.getElementById('exportFmt');
-    if(fmtEl){fmtEl.textContent=isMp4?'✓ MP4 — ready for Instagram':'⚠ WebM format — convert below';
-    fmtEl.style.color=isMp4?'#00d4aa':'#ffb800';}
-    // Always show posting instructions
+    if(fmtEl){fmtEl.textContent='✓ WebM — rename to .mp4 for Instagram';fmtEl.style.color='#00d4aa';}
     var cw=document.getElementById('convertWrap');
     if(cw) cw.style.display='block';
     document.getElementById('exportBtn').disabled=false;
