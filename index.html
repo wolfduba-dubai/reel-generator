@@ -400,6 +400,36 @@ function clearLog(id){var d=document.getElementById(id);if(d){d.style.display='n
 function easeOut(t){return 1-Math.pow(1-t,2.5);}
 function delay(ms){return new Promise(function(r){setTimeout(r,ms);});}
 
+// Convert AudioBuffer to WAV Blob for stitching
+function audioBufferToWav(buffer){
+  var numCh=buffer.numberOfChannels;
+  var sampleRate=buffer.sampleRate;
+  var format=1; // PCM
+  var bitDepth=16;
+  var bytesPerSample=bitDepth/8;
+  var blockAlign=numCh*bytesPerSample;
+  var byteRate=sampleRate*blockAlign;
+  var dataSize=buffer.length*blockAlign;
+  var ab=new ArrayBuffer(44+dataSize);
+  var view=new DataView(ab);
+  function writeStr(o,s){for(var i=0;i<s.length;i++) view.setUint8(o+i,s.charCodeAt(i));}
+  writeStr(0,'RIFF');view.setUint32(4,36+dataSize,true);writeStr(8,'WAVE');
+  writeStr(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,format,true);
+  view.setUint16(22,numCh,true);view.setUint32(24,sampleRate,true);
+  view.setUint32(28,byteRate,true);view.setUint16(32,blockAlign,true);
+  view.setUint16(34,bitDepth,true);writeStr(36,'data');view.setUint32(40,dataSize,true);
+  var offset=44;
+  for(var i=0;i<buffer.length;i++){
+    for(var ch=0;ch<numCh;ch++){
+      var s=buffer.getChannelData(ch)[i];
+      s=Math.max(-1,Math.min(1,s));
+      view.setInt16(offset,s<0?s*32768:s*32767,true);
+      offset+=2;
+    }
+  }
+  return new Blob([ab],{type:'audio/wav'});
+}
+
 // ── CLAUDE API ────────────────────────────────────────────────────────────────
 async function claude(key,prompt,maxTok,logId){
   if(logId) log(logId,'→ Calling Claude...');
@@ -506,96 +536,121 @@ async function generate(){
     ytData={title:parsed.yt_title||'',desc:parsed.yt_desc||'',tags:parsed.yt_tags||[]};
     log('gdbg','→ Got '+chunks.length+' chunks');
 
-    // Smart timing
-    var MIN=1400,MAX=2400;
-    var ideal=Math.max(MIN,Math.min(MAX,dur*1000/chunks.length));
+    // Initial timing — placeholder only, will be replaced by audio sync below
+    var placeholderPer=Math.max(1400,Math.min(2200,dur*1000/chunks.length));
     var t=0;
-    chunks.forEach(function(c){
-      var wc=c.w.split(' ').length;
-      var ct=ideal+(wc>3?250:0);
-      c.start=t;c.end=t+ct-60;t+=ct;
-    });
-    log('gdbg','→ Timing: ~'+(Math.round(ideal/100)/10)+'s per chunk, total '+(Math.round(t/100)/10)+'s');
+    chunks.forEach(function(c){c.start=t;c.end=t+placeholderPer-60;t+=placeholderPer;});
+    log('gdbg','→ Placeholder timing — waiting for audio to sync...');
 
-    // Fish Audio voice (optional)
+    // Fish Audio voice — generate each chunk separately for perfect sync
     if(eKey&&vId){
-      setStep(3);setSt('Generating your voice with Fish Audio...',true,'gbar');
-      // Aggressively strip ALL tags, brackets, parentheses Claude may have added
-      var fullScript=chunks.map(function(c){
-        return c.w
-          .replace(/[(][^)]*[)]/g,'')   // remove (anything)
-          .replace(/[[^]]*]/g,'')        // remove [anything]
-          .replace(/<[^>]*>/g,'')        // remove <anything>
-          .replace(/\s+/g,' ')
-          .trim();
-      }).filter(function(w){return w.length>0;}).join(' ');
-      log('gdbg','→ Clean script: '+fullScript.substring(0,120)+'...');
-      log('gdbg','→ Fish Audio TTS starting...');
-      log('gdbg','→ Model ID: '+vId);
-      log('gdbg','→ Text: '+fullScript.substring(0,80)+'...');
-      try{
-        // Fish Audio uses multipart/form-data with JSON body
-        // payload sent via worker
-        // Use Cloudflare Worker proxy to avoid CORS
-        // Worker forwards request to Fish Audio server-side
-        var vr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            text: fullScript,
-            reference_id: vId,
-            api_key: eKey
-          })
-        });
-        log('gdbg','→ Response status: '+vr.status);
-        if(vr.ok){
-          var ct=vr.headers.get('content-type')||'';
-          log('gdbg','→ Content-Type: '+ct);
-          var audioData=await vr.arrayBuffer();
-          log('gdbg','→ Bytes received: '+audioData.byteLength);
-          if(audioData.byteLength>500){
-            var audioBlob=new Blob([audioData],{type:'audio/mpeg'});
-            audioUrl=URL.createObjectURL(audioBlob);
-            // Sync chunk timings to actual audio duration
-            var tempAudio=new Audio(audioUrl);
-            tempAudio.addEventListener('loadedmetadata',function(){
-              var actualDur=tempAudio.duration*1000; // ms
-              if(actualDur>1000){
-                log('gdbg','→ Actual audio duration: '+(tempAudio.duration).toFixed(1)+'s — syncing chunks...');
-                // Add small delay offset — captions appear slightly AFTER speech starts
-                // This prevents captions appearing before the word is spoken
-                var OFFSET=0; // no offset — captions sync exactly with audio
-                var perChunk=actualDur/chunks.length;
-                var t=0;
-                chunks.forEach(function(c){
-                  var wc=c.w.split(' ').length;
-                  var ct=perChunk+(wc>3?perChunk*0.1:0);
-                  c.start=t;c.end=t+ct-50;t+=ct;
-                });
-                // Normalize so last chunk ends exactly at audio duration
-                var lastEnd=chunks[chunks.length-1].end;
-                var scale2=actualDur/lastEnd;
-                chunks.forEach(function(c){c.start*=scale2;c.end*=scale2;});
-                log('gdbg','→ Chunks resynced with '+OFFSET+'ms offset');
-              }
-            });
-            tempAudio.load();
-            var iv=document.getElementById('infoV');
-            if(iv){iv.textContent='✓ Your voice';iv.className='ib-val ok';}
-            log('gdbg','→ Voice ready! '+(audioData.byteLength/1024).toFixed(0)+'KB');
+      setStep(3);setSt('Generating voice — chunk by chunk for perfect sync...',true,'gbar');
+
+      // Clean chunks
+      var cleanChunks=chunks.map(function(c){
+        return c.w.replace(/[(][^)]*[)]/g,'').replace(/\s+/g,' ').trim();
+      });
+
+      // Generate audio for each chunk individually
+      var chunkAudios=[]; // array of {blob, duration} per chunk
+      var allOk=true;
+
+      for(var ci=0;ci<cleanChunks.length;ci++){
+        var phrase=cleanChunks[ci];
+        if(!phrase){chunkAudios.push(null);continue;}
+        setSt('Generating voice '+(ci+1)+'/'+cleanChunks.length+'...',true,'gbar');
+        log('gdbg','→ Chunk '+(ci+1)+': "'+phrase+'"');
+        try{
+          var cr=await fetch('https://damp-limit-9f5d.foxrak123.workers.dev',{
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({text:phrase,reference_id:vId,api_key:eKey})
+          });
+          if(cr.ok){
+            var cdata=await cr.arrayBuffer();
+            if(cdata.byteLength>200){
+              var cblob=new Blob([cdata],{type:'audio/mpeg'});
+              // Measure exact duration of this chunk
+              var cdur=await new Promise(function(resolve){
+                var a=new Audio(URL.createObjectURL(cblob));
+                a.addEventListener('loadedmetadata',function(){resolve(a.duration*1000);});
+                a.addEventListener('error',function(){resolve(800);});
+                a.load();setTimeout(function(){resolve(800);},3000);
+              });
+              chunkAudios.push({blob:cblob,duration:cdur});
+              log('gdbg','→ Chunk '+(ci+1)+' = '+cdur.toFixed(0)+'ms');
+            } else {
+              chunkAudios.push(null);
+              log('gdbg','→ Chunk '+(ci+1)+' too small, skipping');
+            }
           } else {
-            var decoded=new TextDecoder().decode(audioData);
-            log('gdbg','→ Small response (error?): '+decoded);
+            chunkAudios.push(null);
+            log('gdbg','→ Chunk '+(ci+1)+' failed: '+cr.status);
+            allOk=false;
           }
-        } else {
-          var errBody=await vr.text();
-          log('gdbg','→ FAILED '+vr.status+': '+errBody.substring(0,400));
-          // Keep debug log visible on error
-          document.getElementById('gdbg').style.display='block';
+        }catch(ce){
+          chunkAudios.push(null);
+          log('gdbg','→ Chunk '+(ci+1)+' error: '+ce.message);
         }
-      }catch(ve){
-        log('gdbg','→ Exception: '+ve.message);
-        document.getElementById('gdbg').style.display='block';
+        // Small delay between requests
+        if(ci<cleanChunks.length-1) await delay(150);
+      }
+
+      // Now we know exact duration of each chunk — set caption timings perfectly
+      var t=0;
+      chunks.forEach(function(c,i){
+        var ca=chunkAudios[i];
+        var dur=ca?ca.duration:1500;
+        c.start=t;
+        c.end=t+dur-30;
+        t+=dur;
+      });
+      log('gdbg','→ Total audio: '+(t/1000).toFixed(1)+'s across '+chunks.length+' chunks');
+
+      // Stitch all audio blobs into one using AudioContext
+      setSt('Stitching audio...',true,'gbar');
+      try{
+        var actx=new AudioContext();
+        var buffers=[];
+        for(var bi=0;bi<chunkAudios.length;bi++){
+          if(!chunkAudios[bi]){
+            // Silent gap for missing chunks
+            var silence=actx.createBuffer(1,actx.sampleRate*0.8,actx.sampleRate);
+            buffers.push(silence);
+            continue;
+          }
+          var ab=await chunkAudios[bi].blob.arrayBuffer();
+          try{
+            var decoded=await actx.decodeAudioData(ab);
+            buffers.push(decoded);
+          }catch(e){
+            var silence=actx.createBuffer(1,actx.sampleRate*0.8,actx.sampleRate);
+            buffers.push(silence);
+          }
+        }
+        // Calculate total samples
+        var totalSamples=buffers.reduce(function(a,b){return a+b.length;},0);
+        var combined=actx.createBuffer(1,totalSamples,actx.sampleRate);
+        var channel=combined.getChannelData(0);
+        var offset=0;
+        buffers.forEach(function(b){
+          channel.set(b.getChannelData(0),offset);
+          offset+=b.length;
+        });
+        // Convert to wav blob
+        var wavBlob=audioBufferToWav(combined);
+        audioUrl=URL.createObjectURL(wavBlob);
+        log('gdbg','→ Audio stitched! '+buffers.length+' chunks combined');
+        var iv=document.getElementById('infoV');
+        if(iv){iv.textContent='✓ Your voice (synced)';iv.className='ib-val ok';}
+      }catch(se){
+        log('gdbg','→ Stitch error: '+se.message+' — using first chunk only');
+        // Fallback: just use first chunk audio
+        if(chunkAudios[0]){
+          audioUrl=URL.createObjectURL(chunkAudios[0].blob);
+          var iv=document.getElementById('infoV');
+          if(iv){iv.textContent='✓ Voice (partial)';iv.className='ib-val warn';}
+        }
       }
     }
 
