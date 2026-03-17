@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-135729 per-chunk-sync -->
+<!-- v20260317-141100 style4-fix -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -194,7 +194,7 @@ select option{background:#0e0e1c}
   </div>
   <div class="lbl" style="margin-top:12px">Caption style</div>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px" id="styleGrid">
-    <div class="style-opt sel" id="st1" onclick="pickStyle(1)">
+    <div class="style-opt" id="st1" onclick="pickStyle(1)">
       <div class="st-preview" style="background:#111;border-radius:8px;padding:10px;text-align:center;margin-bottom:6px">
         <span style="font-size:13px;font-weight:900;color:#fff">most people </span>
         <span style="font-size:18px;font-weight:900;color:#c084fc;text-shadow:0 0 10px rgba(192,132,252,.6)">DON'T</span>
@@ -223,7 +223,7 @@ select option{background:#0e0e1c}
       <div style="font-size:10px;font-weight:700;color:var(--muted)">Style 3 — Dark Pill</div>
       <div style="font-size:10px;color:var(--muted);margin-top:2px">Background behind text</div>
     </div>
-    <div class="style-opt" id="st4" onclick="pickStyle(4)">
+    <div class="style-opt sel" id="st4" onclick="pickStyle(4)">
       <div class="st-preview" style="background:#111;border-radius:8px;padding:8px;text-align:center;margin-bottom:6px">
         <span style="font-size:10px;font-weight:700;color:rgba(255,255,255,.5);display:block;letter-spacing:.08em;text-transform:uppercase">the truth about</span>
         <span style="font-size:20px;font-weight:900;color:#fff;display:block">AI <span style="color:#f472b6">money</span></span>
@@ -1069,22 +1069,89 @@ function drawFrame(ms){
       });
 
     } else {
-      // STYLE 4: Split — small faded text above + big bold word centered
-      var centerY=H*0.5+(1-ease)*60;
-      var bigWord=(hiIdx>=0&&hiIdx<displayWords.length?displayWords[hiIdx]:displayWords[displayWords.length-1]||'').toUpperCase();
-      var smallWords=displayWords.filter(function(_,i){return i!==(hiIdx>=0?hiIdx:displayWords.length-1);});
-      if(smallWords.length){
-        ctx.globalAlpha=ease*0.5;ctx.font='700 52px Arial';ctx.fillStyle='#fff';ctx.textAlign='center';
-        ctx.shadowColor='rgba(0,0,0,.9)';ctx.shadowBlur=14;
-        ctx.fillText(smallWords.join(' ').toUpperCase(),W/2,centerY-80);ctx.shadowBlur=0;
+      // STYLE 4: Split — small faded uppercase + big bold colored word
+      // Lower third position — professional reel style
+      var topY   = H * 0.62; // small label line
+      var bottomY= H * 0.72; // big word line
+
+      // Animate in from below
+      var slideIn=(1-ease)*80;
+      topY+=slideIn;bottomY+=slideIn;
+
+      // TOP LINE — small faded uppercase (all words except highlighted)
+      var topWords=displayWords.filter(function(_,i){return i!==hiIdx;});
+      if(topWords.length===0) topWords=displayWords.slice(0,displayWords.length-1);
+      var topText=topWords.join(' ').toUpperCase();
+
+      ctx.globalAlpha=ease*0.55;
+      ctx.font='700 56px Arial';
+      ctx.fillStyle='#ffffff';
+      ctx.textAlign='center';
+      ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur=18;
+      // Scale if too wide
+      var topW=ctx.measureText(topText).width;
+      if(topW>W-120){
+        var topScale=(W-120)/topW;
+        ctx.font='700 '+(56*topScale)+'px Arial';
       }
-      ctx.globalAlpha=ease;ctx.font='900 172px Arial';
-      var bw=ctx.measureText(bigWord).width,bsc=bw>(W-80)?(W-80)/bw:1;
-      ctx.font='900 '+(172*bsc)+'px Arial';
-      ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=10*bsc;ctx.lineJoin='round';
-      ctx.shadowColor=hiColor;ctx.shadowBlur=30;
-      ctx.strokeText(bigWord,W/2,centerY+20);
-      ctx.fillStyle=hiColor;ctx.fillText(bigWord,W/2,centerY+20);ctx.shadowBlur=0;
+      ctx.fillText(topText,W/2,topY);
+      ctx.shadowBlur=0;
+
+      // BOTTOM LINE — big bold, highlighted word colored, rest white
+      var bigFS=148;
+      ctx.globalAlpha=ease;
+
+      // Build bottom line word data
+      var bottomWords=hiIdx>=0&&hiIdx<displayWords.length
+        ? [displayWords[hiIdx]]
+        : [displayWords[displayWords.length-1]||displayWords[0]];
+
+      // Actually show the highlight word BIG + colored, and one context word
+      // Use full phrase for bottom if short, or just key word if long
+      var bottomText='';
+      var bottomHiWord='';
+      if(hiIdx>=0&&hiIdx<displayWords.length){
+        bottomHiWord=displayWords[hiIdx].toUpperCase();
+        // Add one word before/after for context if exists
+        var prev=hiIdx>0?displayWords[hiIdx-1].toUpperCase():'';
+        var next=hiIdx<displayWords.length-1?displayWords[hiIdx+1].toUpperCase():'';
+        bottomText=prev?(prev+' '+bottomHiWord):(next?bottomHiWord+' '+next:bottomHiWord);
+      } else {
+        bottomHiWord=displayWords[displayWords.length-1].toUpperCase();
+        bottomText=bottomHiWord;
+      }
+
+      ctx.font='900 '+bigFS+'px Arial';
+      var totalBW=ctx.measureText(bottomText).width;
+      var bScale=totalBW>(W-80)?(W-80)/totalBW:1;
+      var bFS=bigFS*bScale;
+      ctx.font='900 '+bFS+'px Arial';
+
+      // Draw each word in bottom line
+      var bWords=bottomText.split(' ');
+      var bWidths=bWords.map(function(w){return ctx.measureText(w).width;});
+      var bTotal=bWidths.reduce(function(a,b){return a+b;},0)+(bWords.length-1)*28*bScale;
+      var bx=W/2-bTotal/2;
+
+      bWords.forEach(function(word,wi){
+        var isHi=(word===bottomHiWord);
+        ctx.textAlign='left';
+        // Stroke for readability
+        ctx.strokeStyle='rgba(0,0,0,.9)';
+        ctx.lineWidth=10*bScale;
+        ctx.lineJoin='round';
+        ctx.strokeText(word,bx,bottomY);
+        if(isHi){
+          ctx.shadowColor=hiColor;ctx.shadowBlur=40;
+          ctx.fillStyle=hiColor;
+        } else {
+          ctx.fillStyle='#ffffff';
+          ctx.shadowBlur=0;
+        }
+        ctx.fillText(word,bx,bottomY);
+        ctx.shadowBlur=0;
+        bx+=bWidths[wi]+28*bScale;
+      });
     }
 
     ctx.globalAlpha=1;ctx.textAlign='center';
