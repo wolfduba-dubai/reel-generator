@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-164131 webm-only -->
+<!-- v20260317-165013 restore-perfect-audio -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1235,31 +1235,21 @@ function exportReel(){
   var tracks=Array.from(stream.getVideoTracks());
   var recAudio=null;
   if(audioUrl){
-    recAudio=new Audio(audioUrl);
-    recAudio.crossOrigin='anonymous';
-    // Capture audio stream directly — no AudioContext processing, no buzz
+    recAudio=new Audio(audioUrl);recAudio.play();
     try{
-      var audioStream=recAudio.captureStream
-        ? recAudio.captureStream()
-        : recAudio.mozCaptureStream
-        ? recAudio.mozCaptureStream()
-        : null;
-      if(audioStream){
-        audioStream.getAudioTracks().forEach(function(t){tracks.push(t);});
-        log('gdbg','→ Audio captured via captureStream');
-      }
-    }catch(e){
-      log('gdbg','→ captureStream failed: '+e.message);
-    }
-    recAudio.play();
+      var actx=new AudioContext();
+      var asrc=actx.createMediaElementSource(recAudio);
+      var dest=actx.createMediaStreamDestination();
+      asrc.connect(dest);asrc.connect(actx.destination);
+      dest.stream.getAudioTracks().forEach(function(t){tracks.push(t);});
+    }catch(e){log('gdbg','→ Audio context error: '+e.message);}
   }
 
   var combined=new MediaStream(tracks),recChunks=[];
-  // Always use WebM — clean audio, no buzz
+  // Force WebM — this is what gives clean audio
   var mime='video/webm;codecs=vp9';
   if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
-  var isMp4=false;
-  log('gdbg','→ Recording format: '+mime);
+  log('gdbg','→ Recording as WebM');
   var mr=new MediaRecorder(combined,{mimeType:mime});
   mr.ondataavailable=function(e){if(e.data&&e.data.size>0)recChunks.push(e.data);};
   mr.onstop=function(){
