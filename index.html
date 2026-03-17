@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-154439 single-audio-broll-per-sentence -->
+<!-- v20260317-161908 fix-audio-buzz -->
 <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
@@ -1235,14 +1235,28 @@ function exportReel(){
   var tracks=Array.from(stream.getVideoTracks());
   var recAudio=null;
   if(audioUrl){
-    recAudio=new Audio(audioUrl);recAudio.play();
+    // Use direct audio capture — avoids AudioContext buzz/interference
+    recAudio=new Audio(audioUrl);
+    recAudio.crossOrigin='anonymous';
     try{
-      var actx=new AudioContext();
-      var asrc=actx.createMediaElementSource(recAudio);
+      var actx=new (window.AudioContext||window.webkitAudioContext)();
+      var src=actx.createMediaElementSource(recAudio);
       var dest=actx.createMediaStreamDestination();
-      asrc.connect(dest);asrc.connect(actx.destination);
+      // Connect to both destination (speakers) and recorder
+      src.connect(actx.destination);
+      src.connect(dest);
       dest.stream.getAudioTracks().forEach(function(t){tracks.push(t);});
-    }catch(e){}
+    }catch(e){
+      // Fallback: capture audio directly from element stream
+      try{
+        if(recAudio.captureStream){
+          recAudio.captureStream().getAudioTracks().forEach(function(t){tracks.push(t);});
+        } else if(recAudio.mozCaptureStream){
+          recAudio.mozCaptureStream().getAudioTracks().forEach(function(t){tracks.push(t);});
+        }
+      }catch(e2){log('gdbg','→ Audio capture fallback failed: '+e2.message);}
+    }
+    recAudio.play();
   }
 
   var combined=new MediaStream(tracks),recChunks=[];
