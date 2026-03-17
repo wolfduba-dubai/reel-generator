@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-171057 style4-spacing -->
+<!-- v20260317-172039 bigger-gap -->
+<!-- OLD-v20260317-171057 style4-spacing -->
 <!-- OLD-v20260317-170400 caption-timing-fix -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
@@ -1073,9 +1074,9 @@ function drawFrame(ms){
     } else {
       // STYLE 4: Split — small faded text above + big bold word below
       // Position as clean 2-line unit in lower third
-      var bigFS=160;
-      var smallFS=52;
-      var lineGap=30; // gap between small and big line
+      var bigFS=150;
+      var smallFS=48;
+      var lineGap=80; // generous gap so lines never touch
 
       // Big word — measure and scale if needed
       ctx.font='900 '+bigFS+'px Arial';
@@ -1085,8 +1086,8 @@ function drawFrame(ms){
       var bigFSscaled=bigFS*bsc;
 
       // Position: big word at 72% down, small line above with proper gap
-      var bigY=H*0.72+(1-ease)*50;
-      var smallY=bigY-bigFSscaled-lineGap; // always above big word with gap
+      var bigY=H*0.74+(1-ease)*50;
+      var smallY=bigY-bigFSscaled-lineGap;
 
       // Small top line
       var smallWords=displayWords.filter(function(_,i){return i!==(hiIdx>=0?hiIdx:displayWords.length-1);});
