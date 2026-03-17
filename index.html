@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-174651 yt-desc-hashtags -->
+<!-- v20260317-175223 auto-hashtags-desc -->
+<!-- OLD-v20260317-174651 yt-desc-hashtags -->
 <!-- OLD-v20260317-172039 bigger-gap -->
 <!-- OLD-v20260317-171057 style4-spacing -->
 <!-- OLD-v20260317-170400 caption-timing-fix -->
@@ -537,7 +538,12 @@ async function generate(){
     if(!parsed.chunks||!parsed.chunks.length) throw new Error('No chunks');
     chunks=parsed.chunks;
     igCaption=parsed.ig_caption||'';
-    ytData={title:parsed.yt_title||'',desc:parsed.yt_desc||'',tags:parsed.yt_tags||[]};
+    var rawDesc=parsed.yt_desc||'';
+    var rawTags=parsed.yt_tags||[];
+    // Automatically append hashtags to description — don't rely on Claude
+    var hashTags=rawTags.slice(0,5).map(function(t){return '#'+t.replace(/\s+/g,'');}).join(' ');
+    var descWithHash=rawDesc.trimEnd()+'\n\n'+hashTags+' #Shorts';
+    ytData={title:parsed.yt_title||'',desc:descWithHash,tags:rawTags};
     log('gdbg','→ Got '+chunks.length+' chunks');
 
     // Initial timing — placeholder only, will be replaced by audio sync below
