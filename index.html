@@ -4,8 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-161908 fix-audio-buzz -->
-<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+<!-- v20260317-162725 remove-ffmpeg -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -294,10 +293,13 @@ select option{background:#0e0e1c}
           <div class="note" style="margin-top:4px">If WebM: click Convert below</div>
         </div>
         <div id="convertWrap" style="display:none;margin-top:8px">
-          <button onclick="convertToMp4()" id="convertBtn" style="width:100%;padding:10px;border-radius:10px;border:none;cursor:pointer;font-family:Arial,sans-serif;font-size:13px;font-weight:700;background:linear-gradient(135deg,#ff4d6d,#ff8c00);color:#fff">
-            🔄 Convert to MP4 for Instagram
-          </button>
-          <div class="sbar" id="convertSt"></div>
+          <div style="background:rgba(0,212,170,.05);border:1px solid rgba(0,212,170,.2);border-radius:10px;padding:12px 14px">
+            <div style="font-size:12px;font-weight:700;color:#00d4aa;margin-bottom:8px">📱 Post to Instagram — 2 options:</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.7);line-height:1.9">
+              <strong style="color:#fff">Option 1 (instant):</strong> Right click the downloaded file → Rename → change <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px">.webm</code> to <code style="background:rgba(255,255,255,.1);padding:1px 5px;border-radius:4px">.mp4</code> → upload to Instagram<br><br>
+              <strong style="color:#fff">Option 2 (if Option 1 fails):</strong> <a href="https://cloudconvert.com/webm-to-mp4" target="_blank" style="color:#00d4aa;font-weight:700">cloudconvert.com →</a> upload WebM → convert to MP4 → download → post
+            </div>
+          </div>
         </div>
         <div class="tip-box" style="margin-top:8px">
           <strong>After export:</strong> Instagram → add trending audio → post 🚀<br>
@@ -1287,7 +1289,7 @@ function exportReel(){
     var fmtEl=document.getElementById('exportFmt');
     if(fmtEl){fmtEl.textContent=isMp4?'✓ MP4 — ready for Instagram':'⚠ WebM format — convert below';
     fmtEl.style.color=isMp4?'#00d4aa':'#ffb800';}
-    // Always show convert button — user can always get MP4
+    // Always show posting instructions
     var cw=document.getElementById('convertWrap');
     if(cw) cw.style.display='block';
     document.getElementById('exportBtn').disabled=false;
@@ -1321,41 +1323,6 @@ function copyYtTags(){
     var b=document.getElementById('cpTagsBtn');b.textContent='Copied!';setTimeout(function(){b.textContent='Copy tags';},2000);
   });
 }
-// Convert WebM to MP4 using ffmpeg.wasm
-var webmBlob=null;
-async function convertToMp4(){
-  var btn=document.getElementById('convertBtn');
-  btn.disabled=true;
-  setSt('Loading converter...',true,'convertSt');
-  try{
-    var {createFFmpeg,fetchFile}=FFmpeg;
-    var ff=createFFmpeg({log:false});
-    await ff.load();
-    setSt('Converting to MP4...',true,'convertSt');
-    // Get current WebM blob from download link
-    var dlUrl=document.getElementById('dlLink').href;
-    var resp=await fetch(dlUrl);
-    var webmData=await resp.arrayBuffer();
-    ff.FS('writeFile','input.webm',new Uint8Array(webmData));
-    await ff.run('-i','input.webm','-c:v','libx264','-preset','fast','-crf','23','-c:a','aac','-movflags','+faststart','output.mp4');
-    var mp4Data=ff.FS('readFile','output.mp4');
-    var mp4Blob=new Blob([mp4Data.buffer],{type:'video/mp4'});
-    var mp4Url=URL.createObjectURL(mp4Blob);
-    // Update download link to MP4
-    var dl=document.getElementById('dlLink');
-    dl.href=mp4Url;
-    dl.download='reel-'+Date.now()+'.mp4';
-    dl.textContent='⬇ Download MP4';
-    setSt('✓ MP4 ready! Download above 🔥',false,'convertSt');
-    var fmtEl=document.getElementById('exportFmt');
-    if(fmtEl){fmtEl.textContent='✓ MP4 — ready for Instagram';fmtEl.style.color='#00d4aa';}
-    btn.style.display='none';
-  }catch(e){
-    setSt('Convert failed: '+e.message,false,'convertSt');
-    btn.disabled=false;
-  }
-}
-
 function doCopy(txt,label){
   if(!txt){alert('Generate a reel first.');return;}
   navigator.clipboard.writeText(txt).then(function(){
