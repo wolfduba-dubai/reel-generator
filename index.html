@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-165837 restored-good-version -->
+<!-- v20260317-170400 caption-timing-fix -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -597,13 +597,14 @@ async function generate(){
         if(ci<cleanChunks.length-1) await delay(150);
       }
 
-      // Now we know exact duration of each chunk — set caption timings perfectly
+      // Set caption timings — caption appears slightly early so it's ready when voice speaks
+      var LEAD=80; // ms — show caption 80ms before voice starts
       var t=0;
       chunks.forEach(function(c,i){
         var ca=chunkAudios[i];
         var dur=ca?ca.duration:1500;
-        c.start=t;
-        c.end=t+dur-30;
+        c.start=Math.max(0,t-LEAD);  // appear slightly early
+        c.end=t+dur-20;              // stay until voice finishes
         t+=dur;
       });
       log('gdbg','→ Total audio: '+(t/1000).toFixed(1)+'s across '+chunks.length+' chunks');
