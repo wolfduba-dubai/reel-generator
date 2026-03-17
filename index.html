@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-172039 bigger-gap -->
+<!-- v20260317-174651 yt-desc-hashtags -->
+<!-- OLD-v20260317-172039 bigger-gap -->
 <!-- OLD-v20260317-171057 style4-spacing -->
 <!-- OLD-v20260317-170400 caption-timing-fix -->
 <style>
@@ -528,7 +529,7 @@ async function generate(){
 
   // ── SCRIPT PROMPT ─────────────────────────────────────────────────────────
   // Key: each chunk gets a "visual" keyword for B-roll matching
-  var prompt='Create a '+dur+'-second Instagram Reel script about: "'+topic+'". Return ONLY a JSON object with no extra text:\n{"chunks":[{"w":"plain words only no tags","hi":-1,"hc":0,"visual":"abstract footage term"}],"ig_caption":"caption here","yt_title":"title #Shorts","yt_desc":"description","yt_tags":["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"]}\n\nIMPORTANT:\n- chunks: exactly '+targetChunks+' items\n- w: 2-4 plain spoken words ONLY. NEVER add parentheses, brackets, or emotion words at start. Bad example: (excited) stop buying. Good example: stop buying bitcoin\n- hi: word index to highlight (0,1,2 or -1). Use -1 for most chunks, hi>=0 every 4th chunk\n- hc: 0 or 1 alternating\n- visual: 2-3 words for abstract Pexels footage, no people, examples: "code screen dark" "money bills cash" "sunrise mountain" "dark storm clouds"\n- ig_caption: hook + 3 sentences + question + CTA + 20 hashtags\n- yt_title: keyword first under 80 chars ending #Shorts\n- yt_tags: exactly 12 plain strings no # symbol';
+  var prompt='Create a '+dur+'-second Instagram Reel script about: "'+topic+'". Return ONLY a JSON object with no extra text:\n{"chunks":[{"w":"plain words only no tags","hi":-1,"hc":0,"visual":"abstract footage term"}],"ig_caption":"caption here","yt_title":"title #Shorts","yt_desc":"description","yt_tags":["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"]}\n\nIMPORTANT:\n- chunks: exactly '+targetChunks+' items\n- w: 2-4 plain spoken words ONLY. NEVER add parentheses, brackets, or emotion words at start. Bad example: (excited) stop buying. Good example: stop buying bitcoin\n- hi: word index to highlight (0,1,2 or -1). Use -1 for most chunks, hi>=0 every 4th chunk\n- hc: 0 or 1 alternating\n- visual: 2-3 words for abstract Pexels footage, no people, examples: "code screen dark" "money bills cash" "sunrise mountain" "dark storm clouds"\n- ig_caption: hook + 3 sentences + question + CTA + 20 hashtags\n- yt_title: keyword first under 80 chars ending #Shorts\n- yt_desc: 2-3 sentences with keywords in first line, then end with 5 hashtags like #Shorts #AITools #ArtificialIntelligence\n- yt_tags: exactly 12 plain strings no # symbol';
 
   try{
     var raw=await claude(aKey,prompt,2500,'gdbg');
