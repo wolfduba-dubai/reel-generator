@@ -4,7 +4,8 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-170400 caption-timing-fix -->
+<!-- v20260317-171057 style4-spacing -->
+<!-- OLD-v20260317-170400 caption-timing-fix -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -1070,22 +1071,45 @@ function drawFrame(ms){
       });
 
     } else {
-      // STYLE 4: Split — small faded text above + big bold word centered
-      var centerY=H*0.5+(1-ease)*60;
+      // STYLE 4: Split — small faded text above + big bold word below
+      // Position as clean 2-line unit in lower third
+      var bigFS=160;
+      var smallFS=52;
+      var lineGap=30; // gap between small and big line
+
+      // Big word — measure and scale if needed
+      ctx.font='900 '+bigFS+'px Arial';
       var bigWord=(hiIdx>=0&&hiIdx<displayWords.length?displayWords[hiIdx]:displayWords[displayWords.length-1]||'').toUpperCase();
+      var bw=ctx.measureText(bigWord).width;
+      var bsc=bw>(W-80)?(W-80)/bw:1;
+      var bigFSscaled=bigFS*bsc;
+
+      // Position: big word at 72% down, small line above with proper gap
+      var bigY=H*0.72+(1-ease)*50;
+      var smallY=bigY-bigFSscaled-lineGap; // always above big word with gap
+
+      // Small top line
       var smallWords=displayWords.filter(function(_,i){return i!==(hiIdx>=0?hiIdx:displayWords.length-1);});
       if(smallWords.length){
-        ctx.globalAlpha=ease*0.5;ctx.font='700 52px Arial';ctx.fillStyle='#fff';ctx.textAlign='center';
-        ctx.shadowColor='rgba(0,0,0,.9)';ctx.shadowBlur=14;
-        ctx.fillText(smallWords.join(' ').toUpperCase(),W/2,centerY-80);ctx.shadowBlur=0;
+        ctx.globalAlpha=ease*0.75;
+        ctx.font='700 '+smallFS+'px Arial';
+        var sw=ctx.measureText(smallWords.join(' ').toUpperCase()).width;
+        if(sw>W-120) ctx.font='700 '+Math.floor(smallFS*(W-120)/sw)+'px Arial';
+        ctx.fillStyle='#fff';ctx.textAlign='center';
+        ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=5;ctx.lineJoin='round';
+        ctx.strokeText(smallWords.join(' ').toUpperCase(),W/2,smallY);
+        ctx.fillText(smallWords.join(' ').toUpperCase(),W/2,smallY);
       }
-      ctx.globalAlpha=ease;ctx.font='900 172px Arial';
-      var bw=ctx.measureText(bigWord).width,bsc=bw>(W-80)?(W-80)/bw:1;
-      ctx.font='900 '+(172*bsc)+'px Arial';
-      ctx.strokeStyle='rgba(0,0,0,.85)';ctx.lineWidth=10*bsc;ctx.lineJoin='round';
-      ctx.shadowColor=hiColor;ctx.shadowBlur=30;
-      ctx.strokeText(bigWord,W/2,centerY+20);
-      ctx.fillStyle=hiColor;ctx.fillText(bigWord,W/2,centerY+20);ctx.shadowBlur=0;
+
+      // Big bottom word — colored
+      ctx.globalAlpha=ease;
+      ctx.font='900 '+bigFSscaled+'px Arial';
+      ctx.strokeStyle='rgba(0,0,0,.88)';ctx.lineWidth=Math.round(bigFSscaled*0.07);ctx.lineJoin='round';
+      ctx.shadowColor=hiColor;ctx.shadowBlur=35;
+      ctx.strokeText(bigWord,W/2,bigY);
+      ctx.fillStyle=hiColor;
+      ctx.fillText(bigWord,W/2,bigY);
+      ctx.shadowBlur=0;
     }
 
     ctx.globalAlpha=1;ctx.textAlign='center';
