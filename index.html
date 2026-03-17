@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>AI Reel Generator</title>
-<!-- v20260317-141100 style4-fix -->
+<!-- v20260317-141651 style4-spacing-broll -->
 <style>
 :root{--bg:#06060e;--surface:#0e0e1c;--card:#12121e;--border:#1a1a2e;--accent:#7c6dff;--teal:#00d4aa;--text:#f0f0ff;--muted:#5a5a7a;}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -871,16 +871,18 @@ function getChunk(ms){
   var lastEnd=chunks[chunks.length-1].end;
   // Outro starts 200ms after last chunk — give final caption time to show
   var outroStart=lastEnd+200;
-  if(ms>=outroStart) return {c:null,p:Math.min(1,(ms-outroStart)/3000),outro:true,idx:-1};
+  if(ms>=outroStart) return {c:null,p:Math.min(1,(ms-outroStart)/3000),outro:true,idx:-1,brollIdx:0};
+  // B-roll group: switch clip every ~4 chunks (~6s) not every chunk
+  var grpSize=Math.max(3,Math.ceil(chunks.length/5));
   for(var i=0;i<chunks.length;i++){
-    if(ms>=chunks[i].start&&ms<=chunks[i].end)
-      return {c:chunks[i],p:(ms-chunks[i].start)/(chunks[i].end-chunks[i].start),outro:false,idx:i};
+    if(ms>=chunks[i].start&&ms<=chunks[i].end){
+      return {c:chunks[i],p:(ms-chunks[i].start)/(chunks[i].end-chunks[i].start),outro:false,idx:i,brollIdx:Math.floor(i/grpSize)};
+    }
   }
-  // Between chunks — show previous
   for(var i=chunks.length-1;i>=0;i--){
-    if(ms>chunks[i].end) return {c:chunks[i],p:1,outro:false,idx:i};
+    if(ms>chunks[i].end) return {c:chunks[i],p:1,outro:false,idx:i,brollIdx:Math.floor(i/grpSize)};
   }
-  return {c:chunks[0],p:0,outro:false,idx:0};
+  return {c:chunks[0],p:0,outro:false,idx:0,brollIdx:0};
 }
 
 // Track which video is currently playing to avoid restart flicker
@@ -894,26 +896,29 @@ function drawFrame(ms){
   var info=getChunk(ms);
   var bgVid=null;
 
-  if(info&&!info.outro&&info.idx>=0&&chunkVideos[info.idx]){
+  // Use brollIdx for video switching — changes every ~4 chunks (~6s) not every chunk
+  var brollIdx=info?(info.brollIdx||0):0;
+  if(info&&!info.outro&&chunkVideos[info.idx]){
     bgVid=chunkVideos[info.idx];
-    // Switch video on new chunk
-    if(info.idx!==currentVidIdx){
-      currentVidIdx=info.idx;
-      // Pause all others, play this one
-      var seen={};
-      chunkVideos.forEach(function(v,i){
-        if(!v) return;
-        if(i===info.idx){
-          if(v.paused) v.play();
-        } else if(!seen[v.src]){
-          seen[v.src]=true;
-          // Only pause if it's a different video element
-          if(v!==bgVid&&!v.paused) v.pause();
-        }
-      });
+    // Only switch video when brollIdx changes
+    if(brollIdx!==currentVidIdx){
+      currentVidIdx=brollIdx;
+      // Find the video for this group
+      var groupStart=brollIdx*Math.max(3,Math.ceil(chunks.length/5));
+      var groupVid=chunkVideos[Math.min(groupStart,chunkVideos.length-1)];
+      if(groupVid){
+        bgVid=groupVid;
+        // Pause all, play this one from start
+        var seenSrcs={};
+        chunkVideos.forEach(function(v){
+          if(!v||seenSrcs[v.src]) return;
+          seenSrcs[v.src]=true;
+          if(v===groupVid){if(v.paused){v.currentTime=0;v.play();}}
+          else if(!v.paused) v.pause();
+        });
+      }
     }
   } else if(info&&info.outro&&chunkVideos.length){
-    // Outro: use last chunk's video
     bgVid=chunkVideos[chunkVideos.length-1];
   }
 
@@ -1071,8 +1076,8 @@ function drawFrame(ms){
     } else {
       // STYLE 4: Split — small faded uppercase + big bold colored word
       // Lower third position — professional reel style
-      var topY   = H * 0.62; // small label line
-      var bottomY= H * 0.72; // big word line
+      var topY   = H * 0.60; // small label line
+      var bottomY= H * 0.76; // big word line — more gap to prevent overlap
 
       // Animate in from below
       var slideIn=(1-ease)*80;
